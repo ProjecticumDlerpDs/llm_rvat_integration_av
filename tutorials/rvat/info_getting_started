@@ -1,2 +1,10 @@
+Een document waar ik snel mijn bevindingen opschrijf. 
+
 Met buildGdb() kan je een .gdb file maken met meerdere tabellen, bijv. een tabel 
 met variant info 
+
+gdb is a S4 object. Used for object oriented programming.
+An S4 object has so called 'slots'. To see what slots there are you can check
+slotNames(gdb)
+
+1: getting started

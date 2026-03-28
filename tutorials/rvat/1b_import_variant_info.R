@@ -1,49 +1,13 @@
+# This is a walkthrough of the tutorial for the rvat package: 
+# https://kennalab.github.io/rvat/articles/basics.html
+# Make sure to first run 'tutorials/rvat/1a_setup_gdb.R'
+
 # Necessary packages
 library(tidyverse)
 library(rvat)
 library(rvatData)
 library(SummarizedExperiment)
-
-# These are the in-memory datasets 
-data(package = "rvatData")$results[,"Item"]
-## [1] "GT"         "GTsmall"    "rvbresults"
-
-# Paths to on-disk datasets can be retrieved like this (this gives the names of
-# existing example files)
-rvat_example()
-## [1] "rvatData_varsetfile.txt.gz" "rvatData.gdb"              
-## [3] "rvatData.pheno"             "rvatData.varinfo"          
-## [5] "rvatData.vcf.gz"
-
-# Makes an object of the path of the gdb file in example files
-gdbpath <- rvat_example("rvatData.gdb")
-
-# To make sure output gets stored in a temporary direction this code is used
-outdir <- tempdir()
-
-# How to create a gdb from VCF file?
-vcfpath <- rvat_example("rvatData.vcf.gz") ## Contains path example VCF file
-buildGdb(vcf = vcfpath,
-         output = paste0(outdir,"/rvat_tutorials.gdb"), 
-         overWrite = TRUE,
-         genomeBuild = "GRCh38")
-
-## 2026-03-16 17:47:32	Creating gdb tables
-## 25000 sample IDs detected
-## 2026-03-16 17:47:32	Parsing vcf records
-## 2026-03-16 17:47:56	Processing completed for 1000 records. Committing to db.
-## 2026-03-16 17:48:11	Processing completed for 1802 records. Committing to db.
-## 2026-03-16 17:48:11	Creating var table indexes
-## 2026-03-16 17:48:11	Creating SM table index
-## 2026-03-16 17:48:11	Creating dosage table index
-## 2026-03-16 17:48:11	Creating ranged var table
-## 2026-03-16 17:48:11	Completervat gdb object
-## Path: /tmp/Rtmp0ta3DS/rvat_tutorials.gdb 
-## Warning message:
-## call dbDisconnect() when finished working with a connection 
-
-# With this function you connect to the gdb
-gdb <- gdb(paste0(outdir,"/rvat_tutorials.gdb"))
+library(renv)
 
 # Import variant info with uploadAnno()
 # example file including info such as chromosomal location, annotated gene and variant impact.
@@ -73,3 +37,10 @@ uploadAnno(object = gdb, name = "varInfo",value = varinfo)
 ## HighImpact,ModerateImpact,Synonymous,CADDphred,PolyPhen,SIFT)
 ## [1] 1
 
+# listAnno() shows all variant annotation tables in the gdb
+listAnno(gdb)
+## name               value                     date
+## 1 varInfo interactive_session Sat Mar 28 13:34:08 2026
+
+# getAnno() retrieves a table from the gdb
+variant_info <- getAnno(gdb, table = "varinfo")
