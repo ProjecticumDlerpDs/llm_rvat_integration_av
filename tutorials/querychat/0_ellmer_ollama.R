@@ -2,6 +2,12 @@
 library(ellmer)
 library(tidyverse)
 
+# Check the possible models to choose from
+models_ollama()
+#   id          created_at size       capabilities
+# 1 llama3.1:8b 2026-04-01 4920753328 completion,tools
+# 2    llama3.1 2026-04-01 4920753328 completion,tools
+
 # Function to connect querychat to ollama using Ellmer, because Ellmer is base
 # of querychat. See https://ellmer.tidyverse.org/reference/chat_ollama.html
 model <- models_ollama()[1,1]
