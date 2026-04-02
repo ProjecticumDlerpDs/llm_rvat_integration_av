@@ -5,10 +5,10 @@ Using a large language model to make it easy to perform simple lookups in databa
 This project attempts to simplify lookup questions in rvat's gdb's (gene databases) by making it possible to ask these questions in natural language. The goal is to make a prototype using Querychat and local Ollama to generate SQL-queries based on the natural language input of the user.
 
 ## Packages
-rvat
-rvatData
-querychat
-rollama
+- rvat
+- rvatData
+- querychat
+- ellmer
 
 ## Set-up
 1. Clone the Github repository
