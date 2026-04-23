@@ -16,3 +16,6 @@ qc$app()
 ## `QueryChat()`.
 ## ℹ You can use your querychat::QueryChat object's `$generate_greeting()` method to
 ##   generate a greeting.
+
+# You can also start a console
+qc$console()

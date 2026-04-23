@@ -13,5 +13,5 @@ This project attempts to simplify lookup questions in rvat's gdb's (gene databas
 ## Setup
 1. Clone the Github repository
 2. Run renv::restore()
-3. Install Ollama locally
+3. Install Ollama locally and download possible clients you want to use
 

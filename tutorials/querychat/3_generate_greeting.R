@@ -1,6 +1,5 @@
 # Necessary packages
 library(querychat)
-library(palmerpenguins)
 
 # First tell querychat which database you want to use
 qc <- querychat(mtcars, 

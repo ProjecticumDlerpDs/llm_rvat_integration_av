@@ -46,3 +46,4 @@ buildGdb(vcf = vcfpath,
 
 # With this function you connect to the gdb
 gdb <- gdb(paste0(outdir,"/rvat_tutorials.gdb"))
+gdb
