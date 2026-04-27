@@ -276,4 +276,3 @@ buildVarSet(
 **Result:** 9 female carriers in the SAS cohort.
 
 ---
-

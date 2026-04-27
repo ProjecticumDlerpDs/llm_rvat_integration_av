@@ -18,7 +18,7 @@ AC: alternative allel count
 AN: total number of allelles  
 AF: allel frequency  
 gene_name: Name of the gene  
-HighImpact: If it's a nonsense mutation gives score 1  
+HighImpact: If it's a nonsense mutation or frameshift gives score 1  
 ModerateImpact: If it's a missense mutation gives score 1  
 Synonymous: If it's a silent mutation (amino acid remains same) gives score 1  
 CADDphred:Combined Annotation Dependent Depletion (CADD) Phred-like score  

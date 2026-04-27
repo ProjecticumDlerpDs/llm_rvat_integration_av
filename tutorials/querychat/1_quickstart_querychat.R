@@ -10,12 +10,5 @@ qc <- querychat(penguins,
 
 # Start querychat app
 qc$app()
-## Listening on http://127.0.0.1:4514
-## Warning: No `greeting` provided to `QueryChat()`. Using the LLM `client` to generate one now.
-## ℹ For faster startup, lower cost, and determinism, consider providing a `greeting` to
-## `QueryChat()`.
-## ℹ You can use your querychat::QueryChat object's `$generate_greeting()` method to
-##   generate a greeting.
-
 # You can also start a console
-qc$console()
+

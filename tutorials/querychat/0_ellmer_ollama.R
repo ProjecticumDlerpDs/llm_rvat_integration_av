@@ -31,9 +31,10 @@ client_ollama <-chat_ollama(
 
 # In ellmer you can get a structured chat output with multiple prompts by using
 # parallel_chat_structured()
-chat <- chat_ollama(model = model)
-
+chat <- chat_ollama (model = model)
+chat$chat("How can I log ellmer responses? Answer in 4 sentences")
 prompts <- list("Is the sky blue?",
                 "How can I log ellmer responses?")
-output <- type_object(prompt = type_string(), answer = type_string())
+outpulast_turn()output <- type_object(prompt = type_string(), answer = type_string())
 parallel_chat_structured(chat, prompts, output)
+

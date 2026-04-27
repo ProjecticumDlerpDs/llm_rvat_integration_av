@@ -4,6 +4,7 @@ library(bslib)
 library(querychat)
 library(DT)
 library(palmerpenguins)
+library(tidyverse)
 
 # The following code is partly from Querychat: 
 # https://posit-dev.github.io/querychat/r/articles/build.html
@@ -15,7 +16,10 @@ qc <- QueryChat$new(penguins,
 
 # Step 2: Add UI component 
 ui <- page_sidebar(
-  sidebar = qc$sidebar(), ## sidebar with LLM 
+  sidebar = qc$sidebar(),
+  actionButton("save_chat", "Save Chat History"),
+  verbatimTextOutput("chat_history"),
+  ## sidebar with LLM 
   card(
     card_header("Data Table"),
     dataTableOutput("table") ## unfiltered dataframe that can be filtered
@@ -24,15 +28,9 @@ ui <- page_sidebar(
     fill = FALSE,
     card_header("SQL Query"),
     verbatimTextOutput("sql") ## 
-  ),
-  card(
-    fill = FALSE,
-    card_header("Status"),
-    verbatimTextOutput("status")
   )
-  
-  ## Possibly add reactive prompt + answer that can be trigger for observe()
 )
+
 
 # Step 3: Use reactive values in server
 server <- function(input, output, session) {
@@ -45,23 +43,21 @@ server <- function(input, output, session) {
   output$sql <- renderText({
     qc_vals$sql() %||% "SELECT * FROM penguins"
   })
-  observe({
-    invalidateLater(60000, session)  # Check every minute
-    
-    # Get the last turn
-    last_turn <- qc_vals$client$last_turn()
-    
-    # Check if it's not NULL and has contents
-    if (!is.null(last_turn) && !is.null(last_turn@contents)) {
-      for (content in last_turn@contents) {
-        if (inherits(content, "ellmer::ContentToolRequest")) {
-          cat("Tool called: ", content@name, "\n")
-          cat("Arguments: ", content@arguments, "\n")
-          # Add your custom logic here
-        }
-      }
-    }
-  })
+  
+  # When save_chat button is clicked convert conversation to tibble with 
+  # turns_to_tibble() function
+  observeEvent(input$save_chat, {
+    chat_client <- qc_vals$client
+    turns <- chat_client$get_turns(include_system_prompt = FALSE)
+    chat_tibble <- turns_to_tibble(turns)
+    # Display the tibble as a table
+    # output$chat_table <- renderDT({
+    #   DT::datatable(chat_tibble, options = list(scrollX = TRUE))
+    # })
+    write.csv(chat_tibble, "tutorials/querychat/tool_requests_history.csv", row.names = FALSE)
+    # chevk structure 
+    str(chat_tibble)
+    })
   # observe({
   #   if (!is.null(qc_vals$sql())) {
   #     str(qc_vals$client$last_turn())
@@ -76,7 +72,7 @@ server <- function(input, output, session) {
   # })
 }
 shinyApp(ui, server)
-
 ## Create reactive object
 ## Use observe() to know when querychat had final message 
 ## Use promises to have asynchronous logging -> better for not blocking UI
+?shinyApp

@@ -15,7 +15,7 @@ possible_models
 # Choose the model you want to use in querychat by selecting the row number of 
 # previous function output where x is the row models_ollama()[x,1]
 # When choosing a model make sure to use one with the capapbility 'tools'.
-model <- possible_models[4,1] # selecting the 1st model
+model <- possible_models[2,1] # selecting the 1st model
 
 # Create the client for querychat, you can choose to set certain parameters here
 # as well. 
@@ -30,5 +30,3 @@ client <-chat_ollama(
   credentials = NULL,
   api_headers = character()
 )
-
-?chat_ollama()
