@@ -1,0 +1,130 @@
+---
+title: "Selecting LLM model"
+author: "Anne Visser"
+date: "2026-04-27"
+output: html_document
+---
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(ellmer)
+library(rvat)
+library(rvatData)
+library(DBI)
+outdir <- tempdir()
+gdb <- gdb(rvat_example("rvatData.gdb"))
+data_complete <- readRDS(here("data/data_complete.rds"))
+query <- "SELECT COUNT(VAR_id) AS number_of_variants FROM varInfo_synthetic WHERE gene_name = 'NEK1'"
+sv_NEK1 <- dbGetQuery(gdb, query)
+```
+
+
+In this RMarkdown document the goal is to select an LLM-model to use for the querychat -RVAT prototype. First popular LLM models used for coding and with high text-to-SQL benchmarks were installed through Ollama. Of these only the ones with toolcalling capabilities were selected, since that is a requirement for the use of querychat. Toolcalling is used to run the SQL query in the shiny app and returning the data through an updated table or through sending the aggregation data to the LLM.
+
+```{r models}
+all_models <- ellmer::models_ollama()
+all_models |> select(id, capabilities)
+possible_models <- all_models |>
+  filter(str_detect(capabilities, "tools"))
+possible_models |> select(id, capabilities)
+```
+
+These models were used for a rough selection for the best model to use in the rest
+of the analysis. Toolnames in querychat could either be querychat_query for aggregating or querychat_update_dashboard for selecting and filtering. Of the six possible models only three had successful tool calling results, recognized by the lack of tool_name and query. Which 
+concurs with the warning on ellmer's chat_ollama page where it says tool calling
+seems quite weak (https://ellmer.tidyverse.org/reference/chat_ollama.html).
+
+```{r data_complete}
+data_complete_1 <- data_complete |> 
+  mutate(chat_ID = row_number()) |>
+  filter(question_nr == 1) |>
+  select(chat_ID, model, tool_name, query, assistant_text)
+```
+Only the chats that had a succesful toolcall are selected, which are all the chats with a name in tool_name. In the table below the models are shown with the number of succesful toolcalls within the 5 replicas. 
+```{r data_toolcall}
+data_toolcall_1 <- data_complete_1 |>
+  filter(tool_name != "") |>
+  select(chat_ID, model, tool_name, query, assistant_text)
+data_toolcall_1 |> dplyr::count(model, name = "succesful_toolcalls")
+```
+
+# Exact match score
+Next it is important to not only have a succesful toolcall, but also the most accurate result. The answer to the benchmarkquestion is "SELECT COUNT(VAR_id) AS number_of_variants
+FROM varInfo_synthetic
+WHERE gene_name = 'NEK1'". In this case 'AS number_of_variants' doesn't need to be exactly the same since this is only a column name to store the answer to the query in.
+
+```{r correct_answer}
+query_1 <- "SELECT COUNT\\(VAR_id\\)\\s*(?:AS\\s+\\w+\\s+)?FROM varInfo_synthetic WHERE gene_name = 'NEK1'"
+question1_em <- data_toolcall_1$query |> str_detect(regex(query_1))
+data_EM <- data_toolcall_1 |>
+  mutate(EM = if_else(question1_em, 1, 0))
+data_EM |> group_by(model) |>
+  select(chat_ID, model, query, EM)
+```
+# Execution Accuracy score
+``` {r correct_output}
+EX_scorer <- function(query) {
+  output_query <- tryCatch(
+    dbGetQuery(gdb, query),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  question_ex <- isTRUE(all.equal(sv_NEK1, output_query, check.names = FALSE))
+  if (question_ex == TRUE) {
+  return(1)}
+  else {
+    return(0)}
+}
+data_EM_EX <- data_EM |>
+  mutate(EX = map_int(data_EM$query, EX_scorer))
+data_EM_EX
+```
+
+# Yield sementics score (YES)
+Let's manually check the SQL queries and outputs from the chats with a zero in exact match. 
+```{r data_yes, error=TRUE}
+data_EM_EX |> filter(EX == 0)
+query_17 <- data_EM_EX$query[data_EM_EX$chat_ID == 17]
+query_18 <- data_EM_EX$query[data_EM_EX$chat_ID == 18]
+query_19 <- data_EM_EX$query[data_EM_EX$chat_ID == 19]
+query_20 <- data_EM_EX$query[data_EM_EX$chat_ID == 20]
+output_17 <- dbGetQuery(gdb, query_17)
+output_18 <- dbGetQuery(gdb, query_18)
+output_19 <- dbGetQuery(gdb, query_19) # gives error: incomplete input
+output_20 <- dbGetQuery(gdb, query_20)
+```
+
+```{r data_scored}
+data_scored <- data_EM_EX |>
+  mutate(YES = case_when(
+    EX == 1 ~ 1,
+    chat_ID == 20 ~ 1,
+    TRUE ~ 0  # Default case
+  ),
+  no_output_toolcall = case_when(
+    chat_ID == 19 ~ 1,
+    TRUE ~ 0
+  ))
+data_scored_sum <- data_scored |> 
+  group_by(model) |>
+  summarise(toolcall_counts = n(),
+            working_toolcalls = toolcall_counts - sum(no_output_toolcall),
+            sum_EM = sum(EM),
+            sum_EX = sum(EX),
+            sum_YES = sum(YES)
+            )
+```
+Here we see that both llama3.1:8b and qwen3.5 gave the right answers when counting the YES score. Where the first one also had 2 exact matches but did have 1 toolcall failure. Qwen3.5 had no toolcall failures and delivered 4 execution accuracy scores and 1 not with the exact same output because there was a column with 'gene_name' along with variant count.
+
+# Negative control questions
+To decide if llama3.1:8b and qwen3.5 are better all the negative control questions
+are used as a prompt once for both models. After the first replica there was a clear difference between the two models. Qwen3.5 doesn't give any working query and mostly responds with there being no or too little information to give an answer. Llama3.1:8b consistently provide queries and doesn't recognize that the information is not given in the table. Because of this qwen3.5 will be the default model for the rest of the analysis. 
+
+``` {r nc}
+data_nc_rep1 <- data_complete |>
+  filter(type_question == "nc",
+         replicate == 1) |>
+  select(question_nr, prompt, model, query, assistant_text)
+data_nc_rep1 <- sort_by(data_nc_rep1, data_nc_rep1$question_nr)
+```

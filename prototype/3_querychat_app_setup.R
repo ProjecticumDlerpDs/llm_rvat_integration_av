@@ -11,13 +11,15 @@ library(tidyverse)
 
 greeting_path <- "prototype/prompts/greeting.md"
 data_desc_path <- "prototype/prompts/data_description.md"
+extra_instruct_path <- "prototype/prompts/extra_instructions.md"
 # First setup client and gdb
 # Connect querychat to client and gdb. 
 qc <- querychat(data_source = con,
                 table_name = "varInfo_synthetic",
                 client = client,
                 greeting = greeting_path,
-                data_description = data_desc_path)
+                data_description = data_desc_path,
+                extra_instructions = extra_instruct_path)
 
 # Step 2: Add UI component (basic from querychat tutorial + added 'Save
 # Chat History' action button)

@@ -57,8 +57,8 @@ turns_to_tibble <- function(turns, rep_nr = 1, file_path = "data/raw_data.rds") 
         current_cycle$total_turns <- current_turns
         current_cycle$assistant_text <- as.character(turn@text)
         if (!is.null(last_tool_call)) {
-          current_cycle$query <- last_tool_call$query
-          current_cycle$tool_name <- last_tool_call$name
+          current_cycle$query <- as.character(last_tool_call$query)
+          current_cycle$tool_name <- as.character(last_tool_call$name)
         }
         if (!is.null(last_tool_error)) {
           current_cycle$tool_error <- as.character(last_tool_error)
