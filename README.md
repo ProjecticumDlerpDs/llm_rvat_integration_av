@@ -21,9 +21,9 @@ Download clients you want to use that have the capability **tools**, best result
 8. Setup and launch shinyapp through querychat by following and running "prototype/3_querychat_app_setup.R"
 
 #### * Path to greeting and prompts
-Path greeting: *"prototype/prompts/greeting.md"*  
+**Path greeting:** *"prototype/prompts/greeting.md"*  
 More information is found here: https://posit-dev.github.io/querychat/r/articles/greet.html  
   
-Path data description: *"prototype/prompts/data_desctiption.md"*  
-Path extra instructions: *"prototype/prompts/extra_instructions.md"*  
+**Path data description:** *"prototype/prompts/data_desctiption.md"*  
+**Path extra instructions:** *"prototype/prompts/extra_instructions.md"*  
 More information is found here: https://posit-dev.github.io/querychat/r/articles/context.html
