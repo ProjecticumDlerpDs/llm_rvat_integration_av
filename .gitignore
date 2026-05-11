@@ -25,6 +25,10 @@
 vignettes/*.html
 vignettes/*.pdf
 
+# outputs of Rmd's
+Rmd/*.html
+Rmd/*.pptx
+
 # OAuth2 token, see https://github.com/hadley/httr/releases/tag/v0.3
 .httr-oauth
 
