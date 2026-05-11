@@ -9,7 +9,7 @@ This project attempts to simplify asking questions in rvat's gdb's (gene databas
 - R version 4.5.0 (2025-04-11)
 
 ## Quick start
-Follow these steps for a quick start to launch the querychat app.
+If you meet the requirements above, follow these steps for a quick start to launch the querychat app.
 1. Clone the Github repository
 2. Make a corresponding R project in Rstudio(Posit)
 3. Run renv::restore() in console
