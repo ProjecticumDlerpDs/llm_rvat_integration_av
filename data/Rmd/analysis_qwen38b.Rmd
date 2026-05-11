@@ -1,0 +1,155 @@
+---
+title: "Analysis"
+author: "Anne Visser"
+date: "2026-05-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(here)
+library(ellmer)
+library(rvat)
+library(rvatData)
+library(DBI)
+library(knitr)
+library(kableExtra)
+library(ggsignif)
+library(patchwork)
+outdir <- tempdir()
+gdb <- gdb(rvat_example("rvatData.gdb"))
+data_complete <- readRDS(here("data/data_complete.rds"))
+data <- data_complete |>
+  filter(model == "qwen3:8b")
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r scoring}
+data$EM <- ifelse(
+  !is.na(data$query) &
+  !is.na(data$gold_truth_no_AS) &
+  data$query == data$gold_truth_no_AS,
+  1,
+  0
+)
+
+EX_scorer <- function(query, gold_truth) {
+  output_query <- tryCatch(
+    dbGetQuery(gdb, query),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  output_gold_truth <- tryCatch(
+    dbGetQuery(gdb, gold_truth),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  question_ex <- isTRUE(all.equal(output_gold_truth, output_query, check.names = FALSE))
+  if (question_ex == TRUE) {
+  return(1)}
+  else {
+    return(0)}
+}
+
+data$EX <- map2_int(data$query, data$gold_truth, EX_scorer)
+data |> filter(EX == 0 & is.na(timeout)) |>
+  dplyr::count(question_nr)
+
+data|> filter(question_nr == 4 & EX == 0 & is.na(timeout)) |>
+  select(prompt, replicate, query, gold_truth, assistant_text)
+query <- data$query[data$question_nr == 11 & data$replicate == 3]
+gold <- data$gold_truth[data$question_nr == 11 & data$replicate == 1]
+output_query <- dbGetQuery(gdb, query)
+output_gold <- dbGetQuery(gdb, gold)
+
+data$YES <- case_when(
+    data$EX == 1 ~ 1,
+    data$question_nr == 6 & data$replicate == 3 ~ 1,
+    data$question_nr == 7 & data$replicate == 1 ~ 1,
+    TRUE ~ 0  # Default case
+  )
+write_rds(data, here("data/data_scored.rds"))
+```
+Gets yes score:
+3rd rep 6
+1st rep 7
+
+Question 8 is not split into two categories: hetero and homozygous, but is the correct amount. The question is probably not specific enough. 
+
+Question 11 rep 3 is incomplete summary
+
+Question 16 rep 1 gives answer, but to subjective question
+
+Question 17 is correct in that it filters to show no results. But it should know that high impact and synonymous can't go together. 
+## Table per question
+```{r table_sum, echo=FALSE}
+data_sum <- data |> 
+  group_by(question_nr, type_question) |>
+  summarise(replicates = n(),
+            EM_percentage = round(((sum(EM)/replicates)*100), digits = 0),
+            EX_percentage = round(((sum(EX)/replicates)*100), digits = 0),
+            YES_percentage = round(((sum(YES)/replicates)*100), digits = 0) 
+            )
+```
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r plots, echo=FALSE, fig.height=9, fig.width=12}
+plot_data_tidy <- data_sum |>
+  pivot_longer(cols = EM_percentage:YES_percentage, 
+               names_to = "score_type",
+               values_to = "score_percentage")
+
+plot_reps <- data_sum |>
+  ggplot(aes(x = as.factor(question_nr), y = replicates)) +
+  geom_col() +
+  labs(title = "Number of replicates per question",
+       x = "Question number",
+       y = "Number of replicates") 
+
+plot_lookup <- plot_data_tidy |>
+  filter(type_question == "lookup") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in lookup questions",
+                x = "Question number",
+                y = "Percentage positive scores") 
+
+plot_analytical <- plot_data_tidy |>
+  filter(type_question == "analytical") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in analytical questions",
+                x = "Question number",
+                y = "Percentage positive scores") +
+  ylim(0,100)
+
+plot_nc <- plot_data_tidy |>
+  filter(type_question == "nc") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in negative control questions",
+                x = "Question number",
+                y = "Percentage positive scores")
+
+(plot_reps + plot_lookup)/(plot_analytical + plot_nc) + 
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+
+```
+
+

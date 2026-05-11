@@ -9,11 +9,26 @@ library(bslib)
 library(DT)
 library(tidyverse)
 
+# Before using this script, be sure to first setup the client and gdb and run these
+# scripts. If client and gdb setup are already installed with your preferences 
+# run these scripts with the following code:
+source("prototype/1_client_setup.R")
+
+# source("prototype/2_gdb_setup.R")
+
+# To allow for logging run and select replicate number with rep_nr
+source("prototype/0_logging_function.R")
+rep_nr <- 4
+
+# Paths with additional prompts for greeting, data_description and extra_instructions
 greeting_path <- "prototype/prompts/greeting.md"
 data_desc_path <- "prototype/prompts/data_description.md"
 extra_instruct_path <- "prototype/prompts/extra_instructions.md"
-# First setup client and gdb
-# Connect querychat to client and gdb. 
+
+# Connect to database:
+con <- dbConnect(RSQLite::SQLite(), rvat_example("rvatData.gdb"))
+
+# Connect querychat to client and gdb table "varInfo_synthetic". 
 qc <- querychat(data_source = con,
                 table_name = "varInfo_synthetic",
                 client = client,
@@ -57,12 +72,16 @@ server <- function(input, output, session) {
     chat_client <- qc_vals$client
     # return chat history with $get_turns
     turns <- chat_client$get_turns(include_system_prompt = FALSE)
-    # Turn chat history into tibble
-    turns_to_tibble(turns, rep_nr = 1, file_path = "data/raw_data.rds")
+    # Turn chat history into tibble with turns_to_tibble() function
+    turns_to_tibble(turns, rep_nr = rep_nr, file_path = "data/raw_data.rds")
   })
 
 }
 shinyApp(ui, server)
 
-# When done run: 
+# When done run, this also disconnects from database: 
 qc$cleanup()
+
+# If logging, update 'prototype/4_making_data_complete.R' with
+source("prototype/4_making_data_complete.R")
+

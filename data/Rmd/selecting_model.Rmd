@@ -1,0 +1,221 @@
+---
+title: "Selecting LLM model"
+author: "Anne Visser"
+date: "2026-04-27"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(here)
+library(ellmer)
+library(rvat)
+library(rvatData)
+library(DBI)
+library(knitr)
+library(kableExtra)
+library(ggsignif)
+outdir <- tempdir()
+gdb <- gdb(rvat_example("rvatData.gdb"))
+data_complete <- readRDS(here("data/data_complete.rds"))
+gold_truth_1 <- "SELECT COUNT(VAR_id) AS number_of_variants FROM varInfo_synthetic WHERE gene_name = 'NEK1'"
+gold_truth_2 <- unique(data_complete$gold_truth[data_complete$question_nr==2])
+output_gold_truth_1 <- dbGetQuery(gdb, gold_truth_1)
+output_gold_truth_2 <- dbGetQuery(gdb, gold_truth_2)
+```
+
+In this RMarkdown document the goal is to select an LLM-model to use for the querychat -RVAT prototype. First popular LLM models used for coding and with high text-to-SQL benchmarks were installed through Ollama. Of these only the ones with toolcalling capabilities were selected, since that is a requirement for the use of querychat. Toolcalling is used to run the SQL query in the shiny app and returning the data through an updated table or through sending the aggregation data to the LLM.
+
+```{r models, include=FALSE}
+all_models <- ellmer::models_ollama()
+all_models |> select(id, capabilities)
+possible_models <- all_models |>
+  filter(str_detect(capabilities, "tools"))
+possible_models |> select(id, capabilities)
+```
+## Benchmark prompt 1
+### Select number of variants in NEK1
+These models were used for a rough selection for the best model to use in the rest
+of the analysis. After answering the prompt "Select number of variants in NEK1" 5 times it was determined if how often this resulted in a succesful toolname, showing a succesful toolcall. Toolnames in querychat could either be querychat_query for aggregating or querychat_update_dashboard for selecting and filtering. Of the seven possible models only four had successful tool calling results, recognized by the presence of tool_name and query. Which 
+concurs with the warning on ellmer's chat_ollama page where it says tool calling
+seems quite weak (https://ellmer.tidyverse.org/reference/chat_ollama.html).
+
+```{r data_complete_question1, include=FALSE}
+data_complete_1 <- data_complete |> 
+  mutate(chat_ID = row_number()) |>
+  filter(question_nr == 1) |>
+  select(chat_ID, model, tool_name, query, assistant_text)
+```
+In the table below the models are shown with the number of succesful toolcalls within the 5 replicates. 
+```{r table_succesful_toolcalls}
+succesful_toolcalls_tbl <- data_complete_1 |> 
+  group_by(model) |>
+  summarise(succesful_toolcalls = sum(!is.na(tool_name))
+  )
+knitr::kable(succesful_toolcalls_tbl, 
+             caption = "Table 1: LLM models with the amount of succesful toolcalls within 5 chats with the prompt 'Select number of variants in NEK1",
+             ) |>
+  kable_styling()
+  
+```
+
+## Exact match score (EM), execution accuracy (EX) and Yield-expected-semantics (YES)
+Next it is important to not only have a succesful toolcall, but also the most accurate result. There are three levels the LLM answer gets scored on: 
+- Is the generated query an exact match with the benchmark query (EM)
+- Is the output on the database the same as the benchmark query (EX)
+- Is the logic correct (as well as the answer) (YES)
+ 
+The benchmark query (gold truth) is:
+**"SELECT COUNT(VAR_id) AS number_of_variants FROM varInfo_synthetic WHERE gene_name = 'NEK1'"**. In this case **'AS number_of_variants'** doesn't need to be exactly the same since this is only a column name to store the answer to the query in. Below you see an example of the four toolcalling models and the EM score they get. 
+
+```{r correct_answer}
+query_1 <- "SELECT COUNT\\(VAR_id\\)\\s*(?:AS\\s+\\w+\\s+)?FROM varInfo_synthetic WHERE gene_name = 'NEK1'"
+data_toolcall_1 <- data_complete_1 |>
+  filter(tool_name != "") |>
+  select(chat_ID, model, tool_name, query, assistant_text)
+question1_em <- data_toolcall_1$query |> str_detect(regex(query_1))
+data_EM <- data_toolcall_1 |>
+  mutate(EM = if_else(question1_em, 1, 0))
+```
+
+``` {r correct_output}
+EX_scorer <- function(query, ouput) {
+  output_query <- tryCatch(
+    dbGetQuery(gdb, query),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  question_ex <- isTRUE(all.equal(ouput, output_query, check.names = FALSE))
+  if (question_ex == TRUE) {
+  return(1)}
+  else {
+    return(0)}
+}
+data_EM_EX <- data_EM |>
+  mutate(EX = map_int(data_EM$query, ~ EX_scorer(.x, output_gold_truth_1)))
+data_EM_EX_tbl <- data_EM_EX |> 
+  distinct(model, .keep_all = TRUE)|>
+  select(chat_ID, model, query, EM, EX)
+kable(data_EM_EX_tbl, 
+      caption = "Table 2: EM and EX scores of LLM models with succesful toolcalling, it can either be true (1) or false (0)",
+      format = "html") |>
+  kable_styling()
+```
+
+After this the output of the SQL queries and outputs from the chats with a zero in exact match and excecution accuracy are manually scored. Below you can see the answers of the LLM's in these chats.
+```{r data_yes, error=TRUE}
+data_YES_0 <- data_EM_EX |> 
+  filter(EX == 0)
+kable(data_YES_0, 
+      caption = "Table 3: Chats with a 0 for EM and EX-score and their output",
+      format = "html") |>
+  kable_styling()
+query_17 <- data_EM_EX$query[data_EM_EX$chat_ID == 17]
+query_18 <- data_EM_EX$query[data_EM_EX$chat_ID == 18]
+query_19 <- data_EM_EX$query[data_EM_EX$chat_ID == 19]
+query_20 <- data_EM_EX$query[data_EM_EX$chat_ID == 20]
+```
+### Output chat_ID 17 
+Chat_ID 17 cleary had the wrong answer. The right answer should say there are 190 variants in NEK1.
+
+```{r output_17, error=TRUE}
+output_17 <- dbGetQuery(gdb, query_17)
+output_17
+```
+### Output chat_ID 18
+Chat_ID 18 gives a list with 190 variants, which is correct but it counts the allel counts(AC) not the variants. Which is why it doesn't get a point for right logic.
+```{r output_18, error=TRUE}
+output_18 <- dbGetQuery(gdb, query_18)
+str(output_18)
+```
+### Output chat_ID 19
+The query of chat_ID 19 is not working.
+```{r output_19, error=TRUE}
+output_19 <- dbGetQuery(gdb, query_19)
+```
+### Output chat_ID 20
+Chat_ID 20 gives the correct answer + an extra column with the gene name. This is the correct logic, plus something extra that is also correct which is why it gets a point for correct logic (YES).
+```{r output_20, error=TRUE}
+output_20 <- dbGetQuery(gdb, query_20)
+output_20
+```
+```{r data_scored}
+data_scored <- data_EM_EX |>
+  mutate(YES = case_when(
+    EX == 1 ~ 1,
+    chat_ID == 20 ~ 1,
+    TRUE ~ 0  # Default case
+  ),
+  no_output_toolcall = case_when(
+    chat_ID == 19 ~ 1,
+    TRUE ~ 0
+  ))
+data_scored_sum <- data_scored |> 
+  group_by(model) |>
+  summarise(toolcall_counts = n(),
+            working_query = toolcall_counts  - sum(no_output_toolcall),
+            sum_EM = sum(EM),
+            sum_EX = sum(EX),
+            sum_YES = sum(YES)
+            )
+kable(data_scored_sum, 
+      caption = "Table 4: Scores for LLM models with succesful toolcalls. The same prompt was asked 5 times. Working_query refers to if the query returns output or not.",
+      format = "html") |>
+  kable_styling()
+```
+If all replicates have a 1 in yes score the chat is succesful. Here we see that both llama3.1:8b, qwen3:8b and qwen3.5 gave the right answers when counting the YES score. Where the first one also had 2 exact matches but did have 1 toolcall failure. Qwen3.5 and qwen3:8b had no toolcall failures and delivered 4 execution accuracy scores and 1 not with the exact same output because there was a column with 'gene_name' along with variant count.
+
+``` {r sum_graph}
+succesful_toolcalls_tbl <- succesful_toolcalls_tbl |>
+  filter(model %in% c("qwen3.5", "qwen3:8b", "llama3.1:8b", "llama3.2"))
+kable(succesful_toolcalls_tbl)
+data_scored_sum_tidy <- data_scored_sum |>
+  pivot_longer(cols = sum_EM:sum_YES, 
+               names_to = "score",
+               values_to = "counts") |>
+  mutate(percentage = (counts/5)*100)
+data_scored_sum_tidy |>  ggplot(aes(x = model, y = percentage, fill = score)) +
+    geom_col(position = position_dodge()) + 
+  labs(title = "Benchmarking scores of 4 different LLM models used through ollama",
+       x = "LLM model (from ollama)")
+```
+
+# Negative control questions
+To decide if llama3.1:8b, qwen3:8b or qwen3.5 are better, all the negative control questions are used as a prompt once for all three models. After the first replica there was a clear difference between the models. Both qwen models don't give a working query and mostly respond with there being no or too little information to give an answer. Llama3.1:8b consistently provide queries and doesn't recognize that the information is not given in the table. As an example below you see the responses
+with question twelve.
+
+``` {r nc}
+data_nc_rep1 <- data_complete |>
+  filter(replicate == 1,
+         question_nr == 12) |>
+  select(question_nr, model, query, assistant_text)
+data_nc_rep1 <- head(sort_by(data_nc_rep1, data_nc_rep1$question_nr))
+kable(data_nc_rep1, 
+      caption = "Table 5: Answers to the prompt 'What is the average age of ALS cases?' by qwen3.5, qwen3:8b and llama3.1:8b ",
+      format = "html") |>
+  kable_styling()
+```
+
+``` {r output_14}
+data_nc_rep14 <- data_complete |>
+  filter(replicate == 1,
+         question_nr == 14) |>
+  select(question_nr, prompt, model, query, assistant_text)
+qwen38b_response <- data_nc_rep14$assistant_text[data_nc_rep14$model == "qwen3:8b"]
+qwen35_response <- data_nc_rep14$assistant_text[data_nc_rep14$model == "qwen3.5"]
+```
+
+# Selecting model for further analysis
+Both qwen models are very similar, but in the control questions it stands out that qwen3:8b gives shorter, clearer answers and doesn't try to run nonsense queries. Whereas qwen3.5 mostly shows there is no answer possible, sometimes it does try to run a query, for example with question 14: 'What is the allele frequency of VAR_id 30 in Europeans?' There is no region information so this cannot be answered.
+Where qwen3:8b neatly returns 
+``` {r response_qwen3}
+print(qwen38b_response)
+```
+Qwen3.5 responds with 
+``` {r response_qwen35}
+print(qwen35_response)
+```
+Indicating the last model still tried to make a query. Because of this qwen3:8b will be chosen as the model for further analysis.

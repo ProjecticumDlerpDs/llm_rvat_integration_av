@@ -1,12 +1,12 @@
 # Data description
 
-This is data for the table varInfo_synthetic-1
+This is data for the table 'varInfo_synthetic'.
 This dataset is based on a VCF file where gene variants data is stored. 
 The table has the following column names.
 
 ## Column names 
 
-VAR_id: generic generated variant id-number    
+VAR_id: generic generated variant ID
 CHROM: chromosome  
 POS: position on the chromosome  
 ID: If available an ID from other databases like rsID from dbSNP

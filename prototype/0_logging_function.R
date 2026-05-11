@@ -83,15 +83,15 @@ turns_to_tibble <- function(turns, rep_nr = 1, file_path = "data/raw_data.rds") 
   
   # Convert to tibble
   new_tibble <- tibble::tibble(
-    prompt = sapply(result, function(x) x$prompt),
-    query = sapply(result, function(x) x$query),
-    tool_name = sapply(result, function(x) x$tool_name),
-    tool_error = sapply(result, function(x) x$tool_error),
-    model = sapply(result, function(x) x$model),
-    total_turns = sapply(result, function(x) x$total_turns),
-    assistant_text = sapply(result, function(x) x$assistant_text),
+    prompt = vapply(result, function(x) as.character(x$prompt), FUN.VALUE = character(1)),
+    query = vapply(result, function(x) as.character(x$query), FUN.VALUE = character(1)),
+    tool_name = vapply(result, function(x) as.character(x$tool_name), FUN.VALUE = character(1)),
+    tool_error = vapply(result, function(x) as.character(x$tool_error), FUN.VALUE = character(1)),
+    model = vapply(result, function(x) as.character(x$model), FUN.VALUE = character(1)),
+    total_turns = vapply(result, function(x) as.numeric(x$total_turns), FUN.VALUE = numeric(1)),
+    assistant_text = vapply(result, function(x) as.character(x$assistant_text), FUN.VALUE = character(1)),
     replicate = rep_nr,
-    timestamp = sapply(result, function(x) x$timestamp)
+    timestamp = vapply(result, function(x) as.numeric(x$timestamp), FUN.VALUE = numeric(1))
   )
   # Check if the file exists
   if (file.exists(file_path)) {

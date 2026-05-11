@@ -4,7 +4,7 @@ library(rvatData)
 library(DBI)
 library(RSQLite)
 
-# To use table 'varInfo_synthetic' use the premade script in 
+# To add table 'varInfo_synthetic' use the premade script in 
 # 'prototype/received_files/create_varInfo_synthetic-1.R'
 source("prototype/received_files/create_varInfo_synthetic-1.R")
 
@@ -30,4 +30,4 @@ dbListFields(con, "varInfo_synthetic")
 # Check the first 5 rows
 dbGetQuery(con, "SELECT * FROM varInfo_synthetic LIMIT 5")
 # When done disconnect with following function:
-# dbDisconnect(con)
+dbDisconnect(con)

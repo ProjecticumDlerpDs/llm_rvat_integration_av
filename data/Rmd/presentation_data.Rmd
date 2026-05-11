@@ -1,0 +1,143 @@
+---
+title: "Presentatie 3"
+author: "Anne Visser"
+date: "2026-05-10"
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(here)
+library(ellmer)
+library(rvat)
+library(rvatData)
+library(DBI)
+library(knitr)
+library(kableExtra)
+library(ggsignif)
+library(patchwork)
+library(gridExtra)
+library(grid)
+outdir <- tempdir()
+gdb <- gdb(rvat_example("rvatData.gdb"))
+data_complete <- readRDS(here("data/data_complete.rds"))
+data <- readRDS(here("data/data_scored.rds"))
+head_table <- dbGetQuery(gdb, "SELECT * FROM varInfo_synthetic LIMIT 2")
+```
+
+
+## In hoeverre is het mogelijk om, bij gebruik van querychat met ollama als client, via natural language prompts betrouwbare SQL-queries te genereren voor een RVAT-database (gdb)?
+
+- Hoe werkt ollama?
+- Hoe werkt querychat met ollama als client?
+- Aan welke eisen moet een database voldoen om bruikbaar te zijn voor querychat?
+- Hoe wordt de RVAT database gegenereerd en hoe is deze aanpasbaar?
+- Welk LLM model binnen ollama is het meest geschikt voor het genereren van SQL-queries?
+- Hoe kan querychat aan de rvat-database gekoppeld worden?
+- In hoeverre kan met deze setup de benchmarkvragen van de opdrachtgever betrouwbaar beantwoord worden?
+
+
+## Slide with R Output
+
+```{r table_gdb, echo = FALSE}
+head_table1 <- head_table |>
+  select(VAR_id:gene_name)
+head_table2 <- head_table |>
+  select(HighImpact:SIFT)
+head_table3 <- head_table |>
+  select(ALS_1:Control_5)
+
+kable1 <- kable(head_table1)
+kable2 <- kable(head_table2)
+kable3 <- kable(head_table3)
+
+kable1
+kable2
+kable3
+```
+```{r table_toolcall, echo = FALSE}
+data_complete_1 <- data_complete |> 
+  mutate(chat_ID = row_number()) |>
+  filter(question_nr == 1) |>
+  select(chat_ID, model, tool_name, query, assistant_text)
+
+data_questions <- data_complete |>
+  filter(!is.na(data_complete$prompt)) |>
+  select(question_nr, prompt, type_question, gold_truth) |>
+  distinct()
+
+data_questions <- sort_by(data_questions, ~ question_nr)
+
+kable(data_questions)
+
+succesful_toolcalls_tbl <- data_complete_1 |> 
+  group_by(model) |>
+  summarise(succesful_toolcalls = sum(!is.na(tool_name))
+  )
+
+succesful_toolcalls_tbl <- succesful_toolcalls_tbl |>
+  filter(model %in% c("qwen3.5", "qwen3:8b", "llama3.1:8b", "llama3.2"))
+kable(succesful_toolcalls_tbl)
+
+```
+
+## Results chats qwen3:8b
+
+```{r plots, echo=FALSE, message= FALSE, warning = FALSE, fig.height=9, fig.width=12}
+data_sum <- data |> 
+  group_by(question_nr, type_question) |>
+  summarise(replicates = n(),
+            EM_percentage = round(((sum(EM)/replicates)*100), digits = 0),
+            EX_percentage = round(((sum(EX)/replicates)*100), digits = 0),
+            YES_percentage = round(((sum(YES)/replicates)*100), digits = 0) 
+            )
+
+plot_data_tidy <- data_sum |>
+  pivot_longer(cols = EM_percentage:YES_percentage, 
+               names_to = "score_type",
+               values_to = "score_percentage")
+
+plot_reps <- data_sum |>
+  ggplot(aes(x = as.factor(question_nr), y = replicates)) +
+  geom_col() +
+  labs(title = "Number of replicates per question",
+       x = "Question number",
+       y = "Number of replicates") 
+
+plot_lookup <- plot_data_tidy |>
+  filter(type_question == "lookup") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in lookup questions",
+                x = "Question number",
+                y = "Percentage positive scores") 
+
+plot_analytical <- plot_data_tidy |>
+  filter(type_question == "analytical") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in analytical questions",
+                x = "Question number",
+                y = "Percentage positive scores") +
+  ylim(0,100)
+
+plot_nc <- plot_data_tidy |>
+  filter(type_question == "nc") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in negative control questions",
+                x = "Question number",
+                y = "Percentage positive scores")
+
+(plot_reps + plot_lookup)/(plot_analytical + plot_nc) + 
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+```
+
