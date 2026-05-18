@@ -172,52 +172,60 @@ data_complete <- left_join(raw_data,
                            question_nr,
                            by = join_by(prompt == question))
 
-# Add timeout results (question 5, 4 times, question 7 ,8 and 9 2 times and question 16 once)
-data_complete$timeout <- NA
+# Add timeout results (question 5, 4 times, question 7 ,8 and 9 2 times and question 16 once). 
+# Notice that these are not in raw_data and should be manually added. If deciding to leave these out, 
+# simply put this part in comments
+data_complete$fail_reason <- NA
 data_complete <- data_complete |> add_row(question_nr = 5, 
                                           replicate = 2, 
                                           model = "qwen3:8b",
-                                          timeout = TRUE) |>
-  add_row(question_nr = 5, replicate = 3, model = "qwen3:8b", timeout = TRUE) |>
-  add_row(question_nr = 5, replicate = 4, model = "qwen3:8b", timeout = TRUE) |>
-  add_row(question_nr = 5, replicate = 5, model = "qwen3:8b", timeout = TRUE) |>
+                                          fail_reason = "timeout") |>
+  add_row(question_nr = 5, replicate = 3, model = "qwen3:8b", fail_reason = "timeout") |>
+  add_row(question_nr = 5, replicate = 4, model = "qwen3:8b", fail_reason = "timeout") |>
+  add_row(question_nr = 5, replicate = 5, model = "qwen3:8b", fail_reason = "timeout") |>
 
 # twice for question 7 
-  add_row(question_nr = 7, replicate = 3, model = "qwen3:8b", timeout = TRUE) |> 
-  add_row(question_nr = 7, replicate = 4, model = "qwen3:8b", timeout = TRUE) |>
+  add_row(question_nr = 7, replicate = 3, model = "qwen3:8b", fail_reason = "timeout") |> 
+  add_row(question_nr = 7, replicate = 4, model = "qwen3:8b", fail_reason = "timeout") |>
 
 # Twice for question 8
-  add_row(question_nr = 8, replicate = 2, model = "qwen3:8b", timeout = TRUE) |> 
-  add_row(question_nr = 8, replicate = 4, model = "qwen3:8b", timeout = TRUE) |>
+  add_row(question_nr = 8, replicate = 2, model = "qwen3:8b", fail_reason = "timeout") |> 
+  add_row(question_nr = 8, replicate = 4, model = "qwen3:8b", fail_reason = "timeout") |>
 
 # Twice for question 9
-  add_row(question_nr = 9, replicate = 2, model = "qwen3:8b", timeout = TRUE) |>
-  add_row(question_nr = 9, replicate = 3, model = "qwen3:8b", timeout = TRUE) |>
-  add_row(question_nr = 9, replicate = 4, model = "qwen3:8b", timeout = TRUE) |>
+  add_row(question_nr = 9, replicate = 2, model = "qwen3:8b", fail_reason = "timeout") |>
+  add_row(question_nr = 9, replicate = 3, model = "qwen3:8b", fail_reason = "timeout") |>
+  add_row(question_nr = 9, replicate = 4, model = "qwen3:8b", fail_reason = "timeout") |>
 
 # Once for question 10
-  add_row(question_nr = 10, replicate = 3, model = "qwen3:8b", timeout = TRUE) |>
-  add_row(question_nr = 10, replicate = 4, model = "qwen3:8b", timeout = TRUE) |>
+  add_row(question_nr = 10, replicate = 3, model = "qwen3:8b", fail_reason = "timeout") |>
+  add_row(question_nr = 10, replicate = 4, model = "qwen3:8b", fail_reason = "timeout") |>
 
 # Once for question 16
-  add_row(question_nr = 16, replicate = 3, model = "qwen3:8b", timeout = TRUE)
+  add_row(question_nr = 16, replicate = 3, model = "qwen3:8b", fail_reason = "timeout")
 
-#only keeps unique rows, if a chat is saved multiple times it deletes the duplicate 
+# Only keeps unique rows, if a chat is saved multiple times it deletes the duplicate 
 data_complete <- data_complete |> distinct(across(-timestamp), .keep_all = TRUE)
 
 # Make sure only complete benchmark questions are kept by excluding NA's in 
-# question_nr or model
+# question_nr or model (a missing model means the 'Save Chat History' button was pressed
+# before the chat was over)
 data_complete <- data_complete |>
   filter(!is.na(question_nr) & !is.na(model))
 
 # The first 5 questions are lookup questions, questions 6 to 11 are analytical questions
-# Question 12 to 17 are negative control questions (nc). 
+# Question 12 to 17 are negative control questions (nc). Add type_question
 data_complete <- data_complete |>
   mutate(type_question = case_when(
     data_complete$question_nr <= 5 ~ "lookup",
     data_complete$question_nr > 5 & data_complete$question_nr <= 11 ~ "analytical",
     TRUE ~ "nc"
   ))
+
+# Make type_questions a factor for better visualizing in graphs
+type_questions <- c("lookup", "analytical", "nc")
+data_complete$type_question <- factor(data_complete$type_question, 
+                                      levels = type_questions)
 
 # Add gold_truth information
 gold_truth_info <- control_questions |>

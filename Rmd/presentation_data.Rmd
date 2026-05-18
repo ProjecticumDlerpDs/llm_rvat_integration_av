@@ -33,8 +33,8 @@ head_table <- dbGetQuery(gdb, "SELECT * FROM varInfo_synthetic LIMIT 2")
 - Hoe werkt querychat met ollama als client?
 - Aan welke eisen moet een database voldoen om bruikbaar te zijn voor querychat?
 - Hoe wordt de RVAT database gegenereerd en hoe is deze aanpasbaar?
-- Welk LLM model binnen ollama is het meest geschikt voor het genereren van SQL-queries?
 - Hoe kan querychat aan de rvat-database gekoppeld worden?
+- Welk LLM model binnen ollama is het meest geschikt voor het genereren van SQL-queries?
 - In hoeverre kan met deze setup de benchmarkvragen van de opdrachtgever betrouwbaar beantwoord worden?
 
 

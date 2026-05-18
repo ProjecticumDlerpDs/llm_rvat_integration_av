@@ -1,0 +1,298 @@
+---
+title: "Full benchmarking of text-to-SQL with model qwen3:8b through Ollama"
+author: "Anne Visser"
+date: "2026-05-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(here)
+library(ellmer)
+library(rvat)
+library(rvatData)
+library(DBI)
+library(kableExtra)
+library(patchwork)
+library(ggsignif)
+library(forcats)
+outdir <- tempdir()
+gdb <- gdb(rvat_example("rvatData.gdb"))
+data_complete <- readRDS(here("data/data_complete.rds"))
+data <- data_complete |>
+  filter(model == "qwen3:8b")
+```
+## Can the selected model accurately answer the benchmark questions?
+
+
+### Method (possibly move to method markdown)
+To evaluate whether the selected LLM model (qwen3:8b) can accurately answer the benchmark questions this model was used to answer all the benchmark questions in fivefold. For every question the LLM only received the plot once in every chat without further clarification. The response was scored based on EM, EX and YES (see previous chapter for clarification). All the benchmarking questions are found in table 1. The gold truth query is modified in some cases to make sure that arbitrary factors suchs as a given column name do not limit the chance of scoring an exact match.
+
+```{r benchmark_questions}
+data_questions <- data_complete |>
+  filter(!is.na(data_complete$prompt)) |>
+  select(question_nr, type_question, prompt) |>
+  distinct()
+
+data_questions <- sort_by(data_questions, ~ question_nr)
+
+kable(data_questions, 
+      format = "html",
+      caption = "Table 1: Benchmarking questions with the question type used in benchmarking qwen3:8b model") |>
+  kable_paper()
+```
+
+### Results
+
+In total there were `r nrow(data)` replicates in total of which `r sum(data$type_question == "lookup")` are lookup questions, `r sum(data$type_question == "analytical")` are analystical questions and `r sum(data$type_question == "nc")` are negative control questions. The amount of replicates per question is shown in figure 1. 
+
+```{r scoring_EM_EX, include=FALSE}
+data$EM <- ifelse(
+  !is.na(data$query) &
+  !is.na(data$gold_truth_no_AS) &
+  data$query == data$gold_truth_no_AS,
+  1,
+  0
+)
+
+EX_scorer <- function(query, gold_truth) {
+  output_query <- tryCatch(
+    dbGetQuery(gdb, query),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  output_gold_truth <- tryCatch(
+    dbGetQuery(gdb, gold_truth),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  question_ex <- isTRUE(all.equal(output_gold_truth, output_query, check.names = FALSE))
+  if (question_ex == TRUE) {
+  return(1)}
+  else {
+    return(0)}
+}
+
+data$EX <- map2_int(data$query, data$gold_truth, EX_scorer)
+```
+
+
+```{r YES_score, include=FALSE}
+data_YES <- data|> filter(EX == 0 & is.na(fail_reason)) |>
+  select(prompt, replicate, query, gold_truth, assistant_text)
+query <- data$query[data$question_nr == 7 & data$replicate == 1]
+gold <- data$gold_truth[data$question_nr == 7 & data$replicate == 1]
+output_query <- dbGetQuery(gdb, query)
+output_gold <- dbGetQuery(gdb, gold)
+
+data$YES <- case_when(
+    data$EX == 1 ~ 1,
+    data$question_nr == 6 & data$replicate == 3 ~ 1,
+    data$question_nr == 7 & data$replicate == 1 ~ 1,
+    TRUE ~ 0  # Default case
+  )
+write_rds(data, here("data/data_scored.rds"))
+```
+
+
+
+``` {r negative_reason, echo = FALSE}
+data_negative <- data |> filter(YES == 0)
+data_negative <- data_negative |> 
+  mutate(fail_reason = case_when(
+    str_detect(assistant_text, "The question is not clear or this information is not available in the database.") ~ "unclear question",
+   TRUE ~ fail_reason))
+
+data_negative <- data_negative |> 
+  mutate(fail_reason = case_when(
+    question_nr == 8 & replicate == 1 ~ "incomplete answer",
+    question_nr == 8 & replicate == 3 ~ "incomplete answer",
+    question_nr == 11 & replicate == 3 ~ "incomplete answer",
+    question_nr == 5 & replicate == 1 ~ "misinterpreted",
+    question_nr == 17 & replicate == 1 ~ "misinterpreted",
+    question_nr == 16 & replicate == 1 ~ "misinterpreted",
+    TRUE ~ fail_reason)
+  )
+
+# Make a factor of all the fail_reasons
+fail_reasons <- c("timeout", "unclear question", "incomplete answer", "misinterpreted")
+
+# Check if all the values of fail_reason are in fail_reasons
+# parse_factor(data_negative$fail_reason, levels = fail_reasons)
+
+# Make factor out of column fail_reason
+data_negative$fail_reason <- factor(data_negative$fail_reason, 
+                                           levels = fail_reasons)
+data_negative_counts <- data_negative |>
+  group_by(type_question, fail_reason) |>
+  dplyr::count()
+
+data_negative_question <- data_negative |>
+  group_by(question_nr, type_question) |>
+  dplyr::count(name = "failed_n")
+
+
+# Make sure that for every type_question every fail_reason contains data. To do this a 0 is added for all the fail_reasons without counts.
+data_negative_counts <- data_negative_counts |>
+  ungroup() |>
+  complete(type_question, fail_reason,
+           fill = list(n = 0))
+```
+
+```{r table_sum, echo=FALSE, message=FALSE}
+data_sum <- data |> 
+  group_by(question_nr, type_question) |>
+  summarise(replicates = n(),
+            EM_percentage = round(((sum(EM)/replicates)*100), digits = 0),
+            EX_percentage = round(((sum(EX)/replicates)*100), digits = 0),
+            YES_percentage = round(((sum(YES)/replicates)*100), digits = 0) 
+            )
+
+data_sum_type <- data |>
+  group_by(type_question) |>
+  summarise(replicates = n(),
+            EM_percentage = round(((sum(EM)/replicates)*100), digits = 0),
+            EX_percentage = round(((sum(EX)/replicates)*100), digits = 0),
+            YES_percentage = round(((sum(YES)/replicates)*100), digits = 0) 
+            )
+```
+
+``` {r plot_reps, echo = FALSE}
+plot_reps <- data_sum |>
+  ggplot(aes(x = as.factor(question_nr), y = replicates, fill = type_question)) +
+  geom_col() +
+  scale_fill_grey() +
+  labs(title = "Number of replicates per question",
+       x = "Question number",
+       y = "Number of replicates",
+       caption = "Figure 1: Number of replicates (chats) per question asked to LLM model 'qwen3:8b'") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+plot_reps
+```
+
+Scoring the exact match (EM) and execution accuracy (EX) was performed with an R-script which respectively compared the query of the LLM with the gold truth and the output of the LLM query with the output of the gold truth query. With a positive EM-score, the EX and YES-scores were also positive. Any questions that got a negative EM and EX were manually checked for yielding expected semantics (YES-score). 
+
+Of the `r nrow(data)` total replicates `r sum(data$EM)` had an exact match (EM), `r sum(data$EX)` had a positive execution accuracy (EX) and `r sum(data$YES)` yielded exact semantics (YES).
+The 3rd replicate of question 6 and the 1st replicate of question 7 got a positive YES-score. In both cases the LLM gave the correct answer, but showed more variables or transposed the data table so rows became columns. Figure 2 shows the percentage of positive scores per question type.
+
+```{r plot_type, echo=FALSE}
+plot_data_tidy_type <- data_sum_type |>
+  pivot_longer(cols = EM_percentage:YES_percentage, 
+               names_to = "score_type",
+               values_to = "score_percentage")
+
+plot_type <- plot_data_tidy_type |>
+  ggplot(aes(x = as.factor(type_question),
+             y = score_percentage, 
+             fill = score_type)) +
+  geom_col(position = position_dodge()) +
+  labs(title = str_wrap("Percentage of positive scores for EM, EX and YES in different question types.", width = 50),
+       x = "Question type",
+       y = "Percentage positive scores",
+       caption = str_wrap("Figure 2: Percentage of positive scores per question type for the scores exact match (EM), execution accuracy (EX) and yields-expected-semantics (YES) when using qwen3:8b through ollama for text-to-SQL on an RVAT-database..", 
+                          width = 120)) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 1)) +
+  ylim(0, 100)
+
+plot_type
+```
+
+Question 8 is not split into two categories: hetero and homozygous, but is the correct amount. The question is probably not specific enough. 
+
+Question 11 rep 3 is incomplete summary
+
+Question 16 rep 1 gives answer, but to subjective question
+
+Question 17 is correct in that it filters to show no results. But it should know that high impact and synonymous can't go together. 
+
+The replicates that had negative scores in EM, EX and YES were categorized in the following categories:  
+- **`r fail_reasons[1]`**: Timeout error was given before LLM answered.  
+- **`r fail_reasons[2]`**: LLM notified user that it thought the question to be unclear or the data not being in the database.  
+- **`r fail_reasons[3]`**: The LLM gave only part of the answer, but used correct data.  
+- **`r fail_reasons[4]`**: The LLM misinterpreted the question and thought up an answer outside information given from the prompt or clearly didn't understand what values in the database meant.  
+
+Figure 3 shows the percentage of failed outcomes (where the EX-score and YES-score is 0) with the provided reason of the failure.
+
+
+``` {r plot_negative, echo = FALSE}
+# Add total replicates per type_question and percentage
+data_negative_counts <- data_negative_counts |>
+  mutate(total_reps = case_when(type_question == "analytical" ~ data_sum_type$replicates[data_sum_type$type_question == "analytical"],
+                                type_question == "lookup" ~ data_sum_type$replicates[data_sum_type$type_question == "lookup"],
+                                type_question == "nc" ~ data_sum_type$replicates[data_sum_type$type_question == "nc"],
+                                TRUE ~ 0),
+         percentage = round(100*n/total_reps, digits = 1))
+
+# Make plot 
+plot_negative <- data_negative_counts |>
+  ggplot(aes(x = type_question, 
+             y = percentage,
+             fill = fail_reason)) +
+  geom_col(position = position_dodge()) +
+  labs(title = "Percentage of failed outcomes per fail category per question type",
+       x = "Question type",
+       y = "Percentage failed outcomes",
+       caption = str_wrap("Figure 3: Percentage of failed outcomes per question type when using qwen3:8b through ollama for text-to-SQL on an RVAT-database. The categories give an indication for the reason the query failed.", 
+                          width = 120)) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 1)) +
+  ylim(0,100)
+
+plot_negative
+```
+
+```{r plots, echo=FALSE, include=FALSE, fig.height=9, fig.width=12}
+plot_data_tidy <- data_sum |>
+  pivot_longer(cols = EM_percentage:YES_percentage, 
+               names_to = "score_type",
+               values_to = "score_percentage")
+
+plot_lookup <- plot_data_tidy |>
+  filter(type_question == "lookup") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in lookup questions",
+                x = "Question number",
+                y = "Percentage positive scores") 
+
+plot_analytical <- plot_data_tidy |>
+  filter(type_question == "analytical") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in analytical questions",
+                x = "Question number",
+                y = "Percentage positive scores") +
+  ylim(0,100)
+
+plot_nc <- plot_data_tidy |>
+  filter(type_question == "nc") |>
+           ggplot(aes(x = as.factor(question_nr), 
+                      y = score_percentage,
+                      fill = score_type)) +
+           geom_col(position = position_dodge()) +
+           labs(title = "Positive scores in negative control questions",
+                x = "Question number",
+                y = "Percentage positive scores")
+
+(plot_reps + plot_lookup)/(plot_analytical + plot_nc) + 
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+
+```
+
+
+### Conclusion  
+Qwen3:8b can answer the majority of the benchmark questions of the lookup (78%) or negative control type (89%). Analytical questions were either thought about too long (timeout error), or the LLM notified it didn't have enough information of the question or it was unclear. It seems that these questions either need more context in the data description or extra instructions, more details in the user prompts or follow-up prompts. As of now this is a good indication that qwen3:8b can be used for further testing as it remained true to the data for the most part and had a tendency to quickly say that the question is unclear. This is preferred over the LLM making things up (hallucinating). It only mismatched the question when the question was subjective like "Which variants are most important?" or "Show the 10 most deletorious questions". Even then it did only use data out of the gdb-database and didn't hallucinate anything outside of the database.
+
+### Discussion  
+The YES-scoring method has some flaws to it. It has to be manually checked. To save time right now the assumption was if it scored a point for EM and/or EX, it got a positive YES-score. For EM-scores this assumption is fine, but for EX-scores this  isn't always correct. Which makes it important to also check if the sementics of the LLM-generated query with a negative EM-score and positive EX-score are the same as the golden truth query. 

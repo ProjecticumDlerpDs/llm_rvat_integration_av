@@ -1,0 +1,37 @@
+---
+title: "Ollama"
+author: "Anne Visser"
+date: "2026-05-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## How does Ollama work
+
+Ollama is a program that let's users use open LLM-models locally or cloud based. It needs to be downloaded through the terminal of the server or a local computer. 
+The default LLM model is llama3:8b. If a user wants to use different models it can pull models that are mentioned on https://ollama.com/search.
+Ollama needs to be comanded through the terminal, but with certain R-packages it can be talked to through R.
+There are several packages available: Rollama, ollamar and ellmer_chat_ollama. Rollama and Ollamar are quite similar but Rollama is a little more familiar for working in R. Ellmer_chat_ollama is good when using Shiny apps. 
+
+# How does querychat work with Ollama?
+
+Querychat is...
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
