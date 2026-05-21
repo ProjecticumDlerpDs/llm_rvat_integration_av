@@ -16,9 +16,9 @@ source("prototype/1_client_setup.R")
 
 # source("prototype/2_gdb_setup.R")
 
-# To allow for logging run and select replicate number with rep_nr
+# To allow for logging run and type replicate number after rep_nr <- 
 source("prototype/0_logging_function.R")
-rep_nr <- 4
+rep_nr <- 1
 
 # Paths with additional prompts for greeting, data_description and extra_instructions
 greeting_path <- "prototype/prompts/greeting.md"
