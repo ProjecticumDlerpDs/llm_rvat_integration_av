@@ -6,6 +6,13 @@ output:
   html_document: default
   pdf_document: default
 ---
+<style>
+pre {
+  white-space: pre-wrap;   /* allows wrapping */
+  word-break: normal;      /* prevents breaking inside words */
+  overflow-wrap: normal;   /* avoids forced splitting */
+}
+</style>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
@@ -27,7 +34,8 @@ output_gold_truth_1 <- dbGetQuery(gdb, gold_truth_1)
 output_gold_truth_2 <- dbGetQuery(gdb, gold_truth_2)
 ```
 
-In this RMarkdown document the goal is to select an LLM-model to use for the querychat -RVAT prototype. First popular LLM models used for coding and with high text-to-SQL benchmarks were installed through Ollama. Of these only the ones with toolcalling capabilities were selected, since that is a requirement for the use of querychat. Toolcalling is used to run the SQL query in the shiny app and returning the data through an updated table or through sending the aggregation data to the LLM.
+## Which LLM model within ollama is most suitable for creating SQL-queries through querychat's user input?
+In this RMarkdown document the goal is to select an LLM-model to use for the querychat -RVAT prototype. First popular LLM models under 7 Gb were used for coding and with high text-to-SQL benchmarks were installed through Ollama. The size restriction was done so it would be realistic to use the model on a desktop computer, making the eventual tool more accessible for researchers. Of these models, only the ones with toolcalling capabilities were selected, since that is a requirement for the use of querychat. Toolcalling is used to run the SQL query in the shiny app and returning the data through an updated table or through sending the aggregation data to the LLM.
 
 ```{r models, include=FALSE}
 all_models <- ellmer::models_ollama()
@@ -36,8 +44,8 @@ possible_models <- all_models |>
   filter(str_detect(capabilities, "tools"))
 possible_models |> select(id, capabilities)
 ```
-## Benchmark prompt 1
-### Select number of variants in NEK1
+
+### Answering: Select number of variants in NEK1
 These models were used for a rough selection for the best model to use in the rest
 of the analysis. After answering the prompt "Select number of variants in NEK1" 5 times it was determined if how often this resulted in a succesful toolname, showing a succesful toolcall. Toolnames in querychat could either be querychat_query for aggregating or querychat_update_dashboard for selecting and filtering. Of the seven possible models only four had successful tool calling results, recognized by the presence of tool_name and query. Which 
 concurs with the warning on ellmer's chat_ollama page where it says tool calling
@@ -49,7 +57,9 @@ data_complete_1 <- data_complete |>
   filter(question_nr == 1) |>
   select(chat_ID, model, tool_name, query, assistant_text)
 ```
-In the table below the models are shown with the number of succesful toolcalls within the 5 replicates. 
+
+In table 1 the models are shown with the number of succesful toolcalls within the 5 replicates. It is clear that only 4 out of the 7 models had succesful toolcalls. The answers these 4 models gave were given scores for their performance. 
+
 ```{r table_succesful_toolcalls}
 succesful_toolcalls_tbl <- data_complete_1 |> 
   group_by(model) |>
@@ -62,14 +72,17 @@ knitr::kable(succesful_toolcalls_tbl,
   
 ```
 
-## Exact match score (EM), execution accuracy (EX) and Yield-expected-semantics (YES)
-Next it is important to not only have a succesful toolcall, but also the most accurate result. There are three levels the LLM answer gets scored on: 
+### Exact match score (EM), execution accuracy (EX) and Yield-expected-semantics (YES)
+It is important to not only have a succesful toolcall, but also the most accurate result. There are three levels the LLM answer gets scored on:  
 - Is the generated query an exact match with the benchmark query (EM)
-- Is the output on the database the same as the benchmark query (EX)
-- Is the logic correct (as well as the answer) (YES)
+- Is the output on the database the same as the benchmark query (EX)  
+- Is the logic correct (as well as the answer) (YES) 
+
+When the answer is positive, the chat gets a score of 1, if not it gets a score of 0.
+
  
-The benchmark query (gold truth) is:
-**"SELECT COUNT(VAR_id) AS number_of_variants FROM varInfo_synthetic WHERE gene_name = 'NEK1'"**. In this case **'AS number_of_variants'** doesn't need to be exactly the same since this is only a column name to store the answer to the query in. Below you see an example of the four toolcalling models and the EM score they get. 
+The benchmark query (gold truth) for this question is:  
+**"SELECT COUNT(VAR_id) AS number_of_variants FROM varInfo_synthetic WHERE gene_name = 'NEK1'"**. In this case **'AS number_of_variants'** doesn't need to be exactly the same since this is only a column name to store the answer to the query in.  
 
 ```{r correct_answer}
 query_1 <- "SELECT COUNT\\(VAR_id\\)\\s*(?:AS\\s+\\w+\\s+)?FROM varInfo_synthetic WHERE gene_name = 'NEK1'"
@@ -99,10 +112,6 @@ data_EM_EX <- data_EM |>
 data_EM_EX_tbl <- data_EM_EX |> 
   distinct(model, .keep_all = TRUE)|>
   select(chat_ID, model, query, EM, EX)
-kable(data_EM_EX_tbl, 
-      caption = "Table 2: EM and EX scores of LLM models with succesful toolcalling, it can either be true (1) or false (0)",
-      format = "html") |>
-  kable_styling()
 ```
 
 After this the output of the SQL queries and outputs from the chats with a zero in exact match and excecution accuracy are manually scored. Below you can see the answers of the LLM's in these chats.
@@ -110,37 +119,23 @@ After this the output of the SQL queries and outputs from the chats with a zero 
 data_YES_0 <- data_EM_EX |> 
   filter(EX == 0)
 kable(data_YES_0, 
-      caption = "Table 3: Chats with a 0 for EM and EX-score and their output",
+      caption = "Table 2: Chats with a 0 for EM and EX-score and their output",
       format = "html") |>
   kable_styling()
 query_17 <- data_EM_EX$query[data_EM_EX$chat_ID == 17]
 query_18 <- data_EM_EX$query[data_EM_EX$chat_ID == 18]
 query_19 <- data_EM_EX$query[data_EM_EX$chat_ID == 19]
 query_20 <- data_EM_EX$query[data_EM_EX$chat_ID == 20]
-```
-### Output chat_ID 17 
-Chat_ID 17 cleary had the wrong answer. The right answer should say there are 190 variants in NEK1.
 
-```{r output_17, error=TRUE}
-output_17 <- dbGetQuery(gdb, query_17)
-output_17
+# These queries were than checked through (dbGetQuery(gdb, query))
 ```
-### Output chat_ID 18
-Chat_ID 18 gives a list with 190 variants, which is correct but it counts the allel counts(AC) not the variants. Which is why it doesn't get a point for right logic.
-```{r output_18, error=TRUE}
-output_18 <- dbGetQuery(gdb, query_18)
-str(output_18)
-```
-### Output chat_ID 19
-The query of chat_ID 19 is not working.
-```{r output_19, error=TRUE}
-output_19 <- dbGetQuery(gdb, query_19)
-```
-### Output chat_ID 20
-Chat_ID 20 gives the correct answer + an extra column with the gene name. This is the correct logic, plus something extra that is also correct which is why it gets a point for correct logic (YES).
+Chat_ID 17 cleary had the wrong answer. The right answer should say there are 190 variants in NEK1. Chat_ID 18 gives a list with 190 variants, which is correct but it counts the allel counts(AC) not the variants. Which is why it doesn't get a point for right logic. The query of chat_ID 19 gives an error, because it is not complete. Notice the gene name is not in the query.  
+
+Chat_ID 20 gives the correct answer + an extra column with the gene name. This is the correct logic, plus something extra that is also correct which is why it gets a point for correct logic (YES). See the output in table 3.
 ```{r output_20, error=TRUE}
 output_20 <- dbGetQuery(gdb, query_20)
-output_20
+kable(output_20, format = "html") +
+  kable_paper()
 ```
 ```{r data_scored}
 data_scored <- data_EM_EX |>
@@ -169,9 +164,6 @@ kable(data_scored_sum,
 If all replicates have a 1 in yes score the chat is succesful. Here we see that both llama3.1:8b, qwen3:8b and qwen3.5 gave the right answers when counting the YES score. Where the first one also had 2 exact matches but did have 1 toolcall failure. Qwen3.5 and qwen3:8b had no toolcall failures and delivered 4 execution accuracy scores and 1 not with the exact same output because there was a column with 'gene_name' along with variant count.
 
 ``` {r sum_graph}
-succesful_toolcalls_tbl <- succesful_toolcalls_tbl |>
-  filter(model %in% c("qwen3.5", "qwen3:8b", "llama3.1:8b", "llama3.2"))
-kable(succesful_toolcalls_tbl)
 data_scored_sum_tidy <- data_scored_sum |>
   pivot_longer(cols = sum_EM:sum_YES, 
                names_to = "score",
@@ -183,21 +175,42 @@ data_scored_sum_tidy |>  ggplot(aes(x = model, y = percentage, fill = score)) +
        x = "LLM model (from ollama)")
 ```
 
-# Negative control questions
-To decide if llama3.1:8b, qwen3:8b or qwen3.5 are better, all the negative control questions are used as a prompt once for all three models. After the first replica there was a clear difference between the models. Both qwen models don't give a working query and mostly respond with there being no or too little information to give an answer. Llama3.1:8b consistently provide queries and doesn't recognize that the information is not given in the table. As an example below you see the responses
-with question twelve.
+### Negative control questions
+To decide if llama3.1:8b, qwen3:8b or qwen3.5 are better, all the negative control questions are used as a prompt once for all three models. After the first replica there was a clear difference between the models. Both qwen models don't give a working query and mostly respond with there being no or too little information to give an answer. Llama3.1:8b however, consistently provides queries and doesn't recognize that the information is not given in the table. As an example below you see the responses when prompted with question 12: 'What is the average age of ALS cases?'
 
 ``` {r nc}
-data_nc_rep1 <- data_complete |>
+data_nc_rep12 <- data_complete |>
   filter(replicate == 1,
          question_nr == 12) |>
-  select(question_nr, model, query, assistant_text)
-data_nc_rep1 <- head(sort_by(data_nc_rep1, data_nc_rep1$question_nr))
-kable(data_nc_rep1, 
-      caption = "Table 5: Answers to the prompt 'What is the average age of ALS cases?' by qwen3.5, qwen3:8b and llama3.1:8b ",
-      format = "html") |>
-  kable_styling()
+  select(model, assistant_text)
+response12_qwen35 <- data_nc_rep12$assistant_text[data_nc_rep12$model == "qwen3.5"]
+response12_qwen38b <- data_nc_rep12$assistant_text[data_nc_rep12$model == "qwen3:8b"]
+response12_llama318b <- data_nc_rep12$assistant_text[data_nc_rep12$model == "llama3.1:8b"]
 ```
+
+
+**Qwen3.5** responded with: 
+```
+```{r, results='asis', echo=FALSE}
+cat(response12_qwen35)
+```
+```
+
+
+**Qwen3:8b** responded with:  
+```
+```{r, results='asis', echo=FALSE}
+cat(response12_qwen38b)
+```
+```
+
+
+**Llama3.1:8b** responded with:  
+```{r, echo=FALSE}
+cat(response12_llama318b)
+```
+
+
 
 ``` {r output_14}
 data_nc_rep14 <- data_complete |>
@@ -207,15 +220,30 @@ data_nc_rep14 <- data_complete |>
 qwen38b_response <- data_nc_rep14$assistant_text[data_nc_rep14$model == "qwen3:8b"]
 qwen35_response <- data_nc_rep14$assistant_text[data_nc_rep14$model == "qwen3.5"]
 ```
+Qwen3.5 mostly shows there is no answer possible, but sometimes it does try to run a query, for example in question 14: 'What is the allele frequency of VAR_id 30 in Europeans?' There is no population region information so this cannot be answered.  
 
-# Selecting model for further analysis
-Both qwen models are very similar, but in the control questions it stands out that qwen3:8b gives shorter, clearer answers and doesn't try to run nonsense queries. Whereas qwen3.5 mostly shows there is no answer possible, sometimes it does try to run a query, for example with question 14: 'What is the allele frequency of VAR_id 30 in Europeans?' There is no region information so this cannot be answered.
-Where qwen3:8b neatly returns 
-``` {r response_qwen3}
-print(qwen38b_response)
+
+
+
+**Qwen3:8b**  responded with:
 ```
-Qwen3.5 responds with 
-``` {r response_qwen35}
-print(qwen35_response)
+```{r, results='asis', echo=FALSE}
+cat(qwen38b_response)
 ```
-Indicating the last model still tried to make a query. Because of this qwen3:8b will be chosen as the model for further analysis.
+```
+
+
+**Qwen3.5**  responded with:
+```
+```{r, results='asis', echo=FALSE}
+cat(qwen35_response)
+```
+```
+
+This indicates qwen3.5  still tried to make a query, it was just not the correct format to be accepted by querychat.
+
+### Conclusion
+Of the 4 models with working toolcalls, 2 are not suitable for creating accurate SQL-queries for the RVAT-database table: llama3.2 and llama3:8b. The first model only returned a correct SQL-query 40% of the replicates. Llama3:8b had 1 non-working toolcall and answered all the unanswerable questions. 
+That leaves both qwen models as the most suitable. Both models are very similar, but in the control questions it stands out that qwen3:8b gives shorter, clearer answers and doesn't try to run nonsense queries. Because of this qwen3:8b will be chosen as the model for further analysis. This model not only is the most suitable compared to the other models, but with a 100% execution accuracy (EX) for question 1 and consistently noticing the negative control questions were unanswerable, it answered every question following instructions. 
+
+There was no measure on time efficiency. While running the prompts it took at least 1-2 minutes to generate a SQL-query this impacts the usability of the prototype. Possibly this can improve will be better with a larger LLM model with greater thinking power. 
