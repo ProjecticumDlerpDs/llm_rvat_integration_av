@@ -134,7 +134,8 @@ Chat_ID 17 cleary had the wrong answer. The right answer should say there are 19
 Chat_ID 20 gives the correct answer + an extra column with the gene name. This is the correct logic, plus something extra that is also correct which is why it gets a point for correct logic (YES). See the output in table 3.
 ```{r output_20, error=TRUE}
 output_20 <- dbGetQuery(gdb, query_20)
-kable(output_20, format = "html") +
+kable(output_20, format = "html",
+      caption = "Table 3: Ouput of chat_ID 20 to question 'Select number of variants in NEK1.' This chat_ID has a 0 score for EM and EX. The correct answer is 190 variants. For this the chat_ID receives a YES score of 1.") |>
   kable_paper()
 ```
 ```{r data_scored}
@@ -246,4 +247,4 @@ This indicates qwen3.5  still tried to make a query, it was just not the correct
 Of the 4 models with working toolcalls, 2 are not suitable for creating accurate SQL-queries for the RVAT-database table: llama3.2 and llama3:8b. The first model only returned a correct SQL-query 40% of the replicates. Llama3:8b had 1 non-working toolcall and answered all the unanswerable questions. 
 That leaves both qwen models as the most suitable. Both models are very similar, but in the control questions it stands out that qwen3:8b gives shorter, clearer answers and doesn't try to run nonsense queries. Because of this qwen3:8b will be chosen as the model for further analysis. This model not only is the most suitable compared to the other models, but with a 100% execution accuracy (EX) for question 1 and consistently noticing the negative control questions were unanswerable, it answered every question following instructions. 
 
-There was no measure on time efficiency. While running the prompts it took at least 1-2 minutes to generate a SQL-query this impacts the usability of the prototype. Possibly this can improve will be better with a larger LLM model with greater thinking power. 
+There was no measure on time efficiency. While running the prompts it took at least 1-2 minutes to generate a SQL-query this impacts the usability of the prototype. Possibly this can improve with a larger LLM model with greater thinking power. 

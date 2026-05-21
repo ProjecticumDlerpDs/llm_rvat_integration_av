@@ -2307,33 +2307,6 @@
       "Repository": "RSPM",
       "Encoding": "UTF-8"
     },
-    "airway": {
-      "Package": "airway",
-      "Version": "1.30.0",
-      "Source": "Bioconductor",
-      "Title": "RangedSummarizedExperiment for RNA-Seq in airway smooth muscle cells, by Himes et al PLoS One 2014",
-      "Author": "Michael Love",
-      "Maintainer": "Michael Love <michaelisaiahlove@gmail.com>",
-      "Description": "This package provides a RangedSummarizedExperiment object of read counts in genes for an RNA-Seq experiment on four human airway smooth muscle cell lines treated with dexamethasone. Details on the gene model and read counting procedure are provided in the package vignette. The citation for the experiment is: Himes BE, Jiang X, Wagner P, Hu R, Wang Q, Klanderman B, Whitaker RM, Duan Q, Lasky-Su J, Nikolos C, Jester W, Johnson M, Panettieri R Jr, Tantisira KG, Weiss ST, Lu Q. 'RNA-Seq Transcriptome Profiling Identifies CRISPLD2 as a Glucocorticoid Responsive Gene that Modulates Cytokine Function in Airway Smooth Muscle Cells.' PLoS One. 2014 Jun 13;9(6):e99625. PMID: 24926665. GEO: GSE52778.",
-      "biocViews": "ExperimentData, SequencingData, RNASeqData, GEO",
-      "License": "LGPL",
-      "Depends": [
-        "R (>= 3.5.0)",
-        "SummarizedExperiment"
-      ],
-      "Suggests": [
-        "knitr",
-        "GEOquery",
-        "markdown"
-      ],
-      "VignetteBuilder": "knitr",
-      "git_url": "https://git.bioconductor.org/packages/airway",
-      "git_branch": "RELEASE_3_22",
-      "git_last_commit": "a6a39c3",
-      "git_last_commit_date": "2025-10-29",
-      "Repository": "Bioconductor 3.22",
-      "NeedsCompilation": "no"
-    },
     "askpass": {
       "Package": "askpass",
       "Version": "1.2.1",
@@ -6520,50 +6493,6 @@
       ],
       "Encoding": "UTF-8"
     },
-    "patchwork": {
-      "Package": "patchwork",
-      "Version": "1.3.2",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "The Composer of Plots",
-      "Authors@R": "person(given = \"Thomas Lin\", family = \"Pedersen\", role = c(\"cre\", \"aut\"), email = \"thomasp85@gmail.com\", comment = c(ORCID = \"0000-0002-5147-4711\"))",
-      "Maintainer": "Thomas Lin Pedersen <thomasp85@gmail.com>",
-      "Description": "The 'ggplot2' package provides a strong API for sequentially  building up a plot, but does not concern itself with composition of multiple plots. 'patchwork' is a package that expands the API to allow for  arbitrarily complex composition of plots by, among others, providing  mathematical operators for combining multiple plots. Other packages that try  to address this need (but with a different approach) are 'gridExtra' and  'cowplot'.",
-      "License": "MIT + file LICENSE",
-      "Encoding": "UTF-8",
-      "Imports": [
-        "ggplot2 (>= 3.0.0)",
-        "gtable (>= 0.3.6)",
-        "grid",
-        "stats",
-        "grDevices",
-        "utils",
-        "graphics",
-        "rlang (>= 1.0.0)",
-        "cli",
-        "farver"
-      ],
-      "RoxygenNote": "7.3.2",
-      "URL": "https://patchwork.data-imaginist.com, https://github.com/thomasp85/patchwork",
-      "BugReports": "https://github.com/thomasp85/patchwork/issues",
-      "Suggests": [
-        "knitr",
-        "rmarkdown",
-        "gridGraphics",
-        "gridExtra",
-        "ragg",
-        "testthat (>= 2.1.0)",
-        "vdiffr",
-        "covr",
-        "png",
-        "gt (>= 0.11.0)"
-      ],
-      "VignetteBuilder": "knitr",
-      "Config/Needs/website": "gifski",
-      "NeedsCompilation": "no",
-      "Author": "Thomas Lin Pedersen [cre, aut] (ORCID: <https://orcid.org/0000-0002-5147-4711>)",
-      "Repository": "CRAN"
-    },
     "pillar": {
       "Package": "pillar",
       "Version": "1.11.1",
@@ -7698,6 +7627,52 @@
       "Author": "JJ Allaire [aut], Yihui Xie [aut, cre] (ORCID: <https://orcid.org/0000-0003-0645-5666>), Christophe Dervieux [aut] (ORCID: <https://orcid.org/0000-0003-4474-2498>), Jonathan McPherson [aut], Javier Luraschi [aut], Kevin Ushey [aut], Aron Atkins [aut], Hadley Wickham [aut], Joe Cheng [aut], Winston Chang [aut], Richard Iannone [aut] (ORCID: <https://orcid.org/0000-0003-3925-190X>), Andrew Dunning [ctb] (ORCID: <https://orcid.org/0000-0003-0464-5036>), Atsushi Yasumoto [ctb, cph] (ORCID: <https://orcid.org/0000-0002-8335-495X>, cph: Number sections Lua filter), Barret Schloerke [ctb], Carson Sievert [ctb] (ORCID: <https://orcid.org/0000-0002-4958-2844>), Devon Ryan [ctb] (ORCID: <https://orcid.org/0000-0002-8549-0971>), Frederik Aust [ctb] (ORCID: <https://orcid.org/0000-0003-4900-788X>), Jeff Allen [ctb], JooYoung Seo [ctb] (ORCID: <https://orcid.org/0000-0002-4064-6012>), Malcolm Barrett [ctb], Rob Hyndman [ctb], Romain Lesur [ctb], Roy Storey [ctb], Ruben Arslan [ctb], Sergio Oller [ctb], Posit Software, PBC [cph, fnd], jQuery UI contributors [ctb, cph] (jQuery UI library; authors listed in inst/rmd/h/jqueryui/AUTHORS.txt), Mark Otto [ctb] (Bootstrap library), Jacob Thornton [ctb] (Bootstrap library), Bootstrap contributors [ctb] (Bootstrap library), Twitter, Inc [cph] (Bootstrap library), Alexander Farkas [ctb, cph] (html5shiv library), Scott Jehl [ctb, cph] (Respond.js library), Ivan Sagalaev [ctb, cph] (highlight.js library), Greg Franko [ctb, cph] (tocify library), John MacFarlane [ctb, cph] (Pandoc templates), Google, Inc. [ctb, cph] (ioslides library), Dave Raggett [ctb] (slidy library), W3C [cph] (slidy library), Dave Gandy [ctb, cph] (Font-Awesome), Ben Sperry [ctb] (Ionicons), Drifty [cph] (Ionicons), Aidan Lister [ctb, cph] (jQuery StickyTabs), Benct Philip Jonsson [ctb, cph] (pagebreak Lua filter), Albert Krewinkel [ctb, cph] (pagebreak Lua filter)",
       "Maintainer": "Yihui Xie <xie@yihui.name>",
       "Repository": "RSPM"
+    },
+    "rollama": {
+      "Package": "rollama",
+      "Version": "0.3.0",
+      "Source": "Repository",
+      "Title": "Communicate with 'Ollama' to Run Large Language Models Locally",
+      "Authors@R": "c(person(given = \"Johannes B.\", family = \"Gruber\", email = \"JohannesB.Gruber@gmail.com\",  role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0001-9177-1772\")), person(given = \"Maximilian\", family = \"Weber\", role = c(\"aut\", \"ctb\"), comment = c(ORCID = \"0000-0002-1174-449X\")))",
+      "Description": "Wraps the 'Ollama' <https://ollama.com> API, which can be used to  communicate with generative large language models locally.",
+      "License": "GPL (>= 3)",
+      "Encoding": "UTF-8",
+      "RoxygenNote": "7.3.3",
+      "Imports": [
+        "callr",
+        "cli",
+        "dplyr",
+        "httr2",
+        "jsonlite",
+        "methods",
+        "prettyunits",
+        "purrr",
+        "rlang",
+        "tibble",
+        "withr"
+      ],
+      "Suggests": [
+        "base64enc",
+        "covr",
+        "glue",
+        "knitr",
+        "rmarkdown",
+        "S7",
+        "spelling",
+        "testthat (>= 3.0.0)"
+      ],
+      "Depends": [
+        "R (>= 4.1.0)"
+      ],
+      "VignetteBuilder": "knitr",
+      "Config/testthat/edition": "3",
+      "Language": "en-US",
+      "URL": "https://jbgruber.github.io/rollama/, https://github.com/JBGruber/rollama",
+      "BugReports": "https://github.com/JBGruber/rollama/issues",
+      "NeedsCompilation": "no",
+      "Author": "Johannes B. Gruber [aut, cre] (ORCID: <https://orcid.org/0000-0001-9177-1772>), Maximilian Weber [aut, ctb] (ORCID: <https://orcid.org/0000-0002-1174-449X>)",
+      "Maintainer": "Johannes B. Gruber <JohannesB.Gruber@gmail.com>",
+      "Repository": "CRAN"
     },
     "rpart": {
       "Package": "rpart",
@@ -9123,6 +9098,31 @@
       "Author": "Jim Hester [aut] (ORCID: <https://orcid.org/0000-0002-2739-7082>), Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Jennifer Bryan [aut, cre] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Shelby Bearrows [ctb], https://github.com/mandreyel/ [cph] (mio library), Jukka Jylänki [cph] (grisu3 implementation), Mikkel Jørgensen [cph] (grisu3 implementation), Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
       "Maintainer": "Jennifer Bryan <jenny@posit.co>",
       "Repository": "RSPM"
+    },
+    "wesanderson": {
+      "Package": "wesanderson",
+      "Version": "0.3.7",
+      "Source": "Repository",
+      "Title": "A Wes Anderson Palette Generator",
+      "Description": "Palettes generated mostly from 'Wes Anderson' movies.",
+      "Date": "2023-10-30",
+      "Authors@R": "c(person(\"Karthik\", \"Ram\", role = c(\"aut\", \"cre\"), email = \"karthik.ram@gmail.com\", comment = c(ORCID = \"0000-0002-0233-1757\")), person(\"Hadley\", \"Wickham\", role = \"aut\", email = \"h.wickham@gmail.com\"), person(\"Clark\", \"Richards\", role = \"ctb\", email = \"crichards@whoi.edu\"), person(\"Aaron\", \"Baggett\", role = \"ctb\", email = \"aaronbaggett@gmail.com\"))",
+      "Depends": [
+        "R (>= 3.0)"
+      ],
+      "License": "MIT + file LICENSE",
+      "LazyData": "true",
+      "Suggests": [
+        "ggplot2"
+      ],
+      "URL": "https://github.com/karthik/wesanderson",
+      "BugReports": "https://github.com/karthik/wesanderson/issues",
+      "RoxygenNote": "7.2.3",
+      "NeedsCompilation": "no",
+      "Author": "Karthik Ram [aut, cre] (<https://orcid.org/0000-0002-0233-1757>), Hadley Wickham [aut], Clark Richards [ctb], Aaron Baggett [ctb]",
+      "Maintainer": "Karthik Ram <karthik.ram@gmail.com>",
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
     },
     "whisker": {
       "Package": "whisker",
