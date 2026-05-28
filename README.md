@@ -7,7 +7,7 @@ Below there's a screenshot of the prototype's dashboard.
 ![Image 1: Screenshot querychat dashboard](Rmd/figures/screenshot_querychat_dashboard.png)
 
 
-![Image 2: Dataflow](Rmd/figures/Dataflow_DLERPA_prototype.png)
+![Image 2: Dataflow](Rmd/figures/dataflow_DLERPA_prototype.png)
 
 ## Requirements
 - RStudio(Posit)
