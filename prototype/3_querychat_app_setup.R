@@ -10,17 +10,17 @@ library(DT)
 library(tidyverse)
 
 # Before using this script, be sure to first setup the client and gdb and run these
-# scripts. If client and gdb setup are already installed with your preferences 
+# scripts. If client- and gdb-setup are already installed with your preferences 
 # run these scripts with the following code:
 source("prototype/1_client_setup.R")
+source("prototype/2_gdb_setup.R")
 
-# source("prototype/2_gdb_setup.R")
-
-# To allow for logging run and type replicate number after rep_nr <- 
+# To allow for logging run source("prototype/0_logging_function.R") and type replicate 
+# number after rep_nr <- 
 source("prototype/0_logging_function.R")
 rep_nr <- 1
 
-# Paths with additional prompts for greeting, data_description and extra_instructions
+# Paths with additional prompts for the greeting, data_description and extra_instructions
 greeting_path <- "prototype/prompts/greeting.md"
 data_desc_path <- "prototype/prompts/data_description.md"
 extra_instruct_path <- "prototype/prompts/extra_instructions.md"

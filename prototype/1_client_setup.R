@@ -2,32 +2,30 @@
 library(ellmer)
 library(tidyverse)
 
-# Check the possible models to choose from within ollama
+# Check all the models to choose from within ollama
 all_models <- models_ollama()
 all_models
+
+# Show only the models that are appropiate to use with querychat (it needs to have
+# capability "tools")
 possible_models <- all_models |>
   filter(str_detect(capabilities, "tools"))
 possible_models
-## id created_at       size                     capabilities
-## 1 qwen2.5-coder 2026-04-20 4683087561          completion,tools,insert
-## 2     phi4-mini 2026-04-20 2491876774                 completion,tools
-## 3       mistral 2026-04-20 4372824384                 completion,tools
-## 4       qwen3.5 2026-04-20 6594474711 completion,vision,tools,thinking
-## 5      llama3.2 2026-04-20 2019393189                 completion,tools
-## 6   llama3.1:8b 2026-04-17 4920753328                 completion,tools
+
 
 # Choose the model you want to use in querychat by selecting the row number of 
-# previous function output where x is the row models_ollama()[x,1]
-# When choosing a model make sure to use one with the capapbility 'tools'.
-model <- possible_models[2,1] # selecting model
+# the preferred model as the x in possible_models[x,1].
+# The best performing model up until now has been "qwen3:8b". 
+model <- possible_models[3,1] # selecting model
 
-# Create the client for querychat, you can choose to set certain parameters here
-# as well. 
+# Create the client for querychat by creating an Ellmer chat object through Ellmer's
+# chat_ollama() function. You can choose to set certain parameters here
+# as well. See more information with: ?chat_ollama()
 client <-chat_ollama(
-  system_prompt = NULL,
+  system_prompt = NULL, ## this will be filled with querychat's system prompt
   base_url = Sys.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-  model = model,
-  params = NULL,
+  model = model, ## the model that was selected
+  params = NULL, ## here you can change the temperature and other parameters
   api_args = list(),
   echo = NULL,
   api_key = NULL,
