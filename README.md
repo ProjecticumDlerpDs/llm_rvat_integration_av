@@ -4,10 +4,9 @@ Building a prototype for matching a large language model to a database generated
 ## Information
 This project attempts to simplify retrieving information from rvat's gdb's (gene databases) by making it possible to ask these questions in natural language. The goal is to make a prototype using Querychat and local Ollama model to generate SQL-queries based on the natural language input of the user (text-to-SQL) and benchmark the answers. The project contains a benchmark method and makes logging of the chat history possible with a 'Save Chat History' button in the Shiny app. 
 Below there's a screenshot of the prototype's dashboard.
-![Image 1: Screenshot querychat dashboard](Rmd/figures/screenshot_querychat_dashboard.png)
+![Image 1: Flowchart querychat](Rmd/figures/querychat_flowchart.png)
 
-
-![Image 2: Dataflow](Rmd/figures/dataflow_DLERPA_prototype.png)
+![Image 2: Dataflow prototype](Rmd/figures/Dataflow_DLERPA(3).png)
 
 ## Requirements
 - RStudio(Posit)

@@ -2,7 +2,7 @@
 title: "Ollama"
 author: "Anne Visser"
 date: "2026-05-17"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}

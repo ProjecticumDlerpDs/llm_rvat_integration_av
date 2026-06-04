@@ -69,6 +69,22 @@ server <- function(input, output, session) {
   # When save_chat button is clicked convert conversation to tibble with 
   # turns_to_tibble() function
   observeEvent(input$save_chat, {
+    # Names of qcvals (querychat reactive values) were checked with:
+    # names(qcvals)
+    ## [1] "client" "sql"    "title"  "df"
+    # Names of qcvals$client was checked with
+    # names(qcvals$client)
+    ## [1] "stream_async"          "stream"                "set_turns"            
+    ## [4] "set_tools"             "set_system_prompt"     "register_tools"       
+    ## [7] "register_tool"         "on_tool_result"        "on_tool_request"      
+    ## [10] "last_turn"             "initialize"            "get_turns"            
+    ## [13] "get_tools"             "get_tokens"            "get_system_prompt"    
+    ## [16] "get_provider"          "get_model"             "get_cost"             
+    ## [19] "clone"                 "chat_structured_async" "chat_structured"      
+    ## [22] "chat_async"            "chat"                  "add_turn"             
+    ## [25] ".__enclos_env__"   
+    
+    # Make object of the client object in qcvals
     chat_client <- qc_vals$client
     # return chat history with $get_turns
     turns <- chat_client$get_turns(include_system_prompt = FALSE)
