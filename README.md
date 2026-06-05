@@ -33,7 +33,7 @@ The sub-questions are divided into questions for exploring Ollama and the used R
 ##### Benchmarking large language models within Ollama
 7. Which LLM model within Ollama is most suitable for generating SQL queries within Querychat?
 
-8. To what extent can the benchmark questions be accurately and reliably answered using this model?
+8. To what extent can the benchmark questions be accurately and reliably answered with at least a yield exact semantics(YES) score (using this model?
 
 ## Data management
 
