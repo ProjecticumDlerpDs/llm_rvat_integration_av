@@ -28,7 +28,9 @@ extra_instruct_path <- "prototype/prompts/extra_instructions.md"
 # Connect to database:
 con <- dbConnect(RSQLite::SQLite(), rvat_example("rvatData.gdb"))
 
-# Connect querychat to client and gdb table "varInfo_synthetic". 
+# Now we can built the querychat app
+# Step 1: Connect querychat to client and gdb table "varInfo_synthetic". Also add 
+# any greeting, data_description or extra_instructions.
 qc <- querychat(data_source = con,
                 table_name = "varInfo_synthetic",
                 client = client,
@@ -36,13 +38,13 @@ qc <- querychat(data_source = con,
                 data_description = data_desc_path,
                 extra_instructions = extra_instruct_path)
 
-# Step 2: Add UI component (basic from querychat tutorial + added 'Save
+# Step 2: Add UI component (this code is from the querychat tutorial + added 'Save
 # Chat History' action button)
 ui <- page_sidebar(
-  sidebar = qc$sidebar(),
-  actionButton("save_chat", "Save Chat History"),
+  sidebar = qc$sidebar(),  ## sidebar with LLM chatbox
+  actionButton("save_chat", "Save Chat History"), ## Save chat history button
   verbatimTextOutput("chat_history"),
-  ## sidebar with LLM 
+  
   card(
     card_header("Data Table"),
     dataTableOutput("table") ## unfiltered dataframe that can be filtered

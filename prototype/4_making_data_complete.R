@@ -1,19 +1,24 @@
 # Necessary packages
 library(tidyverse)
 
-# Extract questions from greeting.md
+# This script first makes a tibble of the benchmarking questions with additional 
+# information (gold truth, question number etc.) and then merges this with the 
+# data from raw_data.rds.
+
+# Extract benchmark questions from "prototype/prompts/greeting.md" 
 text <- as.vector(read_file("prototype/prompts/greeting.md"))
 clean_questions <- as_tibble(str_extract_all(text, 
                                    "<span class=\"suggestion\">.*</span>", 
                                    simplify = TRUE))
 
-# Make data tidy 
+# Make question data tidy 
 clean_questions <- pivot_longer(clean_questions, 
                                 cols = V1:V17,  
                                 names_to = "question_nr",
                                 values_to = "question")
 
-# Delete the <span class=\"suggestion\"> and </span> part of the string
+# Delete the <span class=\"suggestion\"> and </span> part of the string that was in 
+# "prototype/prompts/greeting.md"
 clean_questions$question <- clean_questions$question |>
   str_replace_all(pattern = "<span class=\"suggestion\">", replacement = "") |>
   str_replace(pattern = "</span>", replacement = "")
@@ -77,7 +82,7 @@ gold_truth <- c("SELECT COUNT(VAR_id) AS number_of_variants
                 GROUP BY gene_name, CHROM
                 HAVING total_variants > 10
                 ORDER BY total_variants DESC",
-                NA,
+                NA, ## negative control questions have NA as gold_truth
                 NA,
                 NA,
                 NA,
@@ -164,7 +169,8 @@ control_questions <- tibble(question_nr = seq(1:17),
        gold_truth = gold_truth,
        gold_truth_no_AS = gold_truth_no_AS)
 
-# Add type_question and question_nr to the raw_data table and call it data_complete.
+# Add type_question and question_nr to the raw_data 
+# table and call it data_complete.
 raw_data <- readRDS("data/raw_data.rds")
 question_nr <- control_questions |>
   select(question_nr, question)
@@ -227,11 +233,11 @@ type_questions <- c("lookup", "analytical", "nc")
 data_complete$type_question <- factor(data_complete$type_question, 
                                       levels = type_questions)
 
-# Add gold_truth information
+# Add gold_truth and gold_truth_no_AS information
 gold_truth_info <- control_questions |>
   select(question_nr, gold_truth, gold_truth_no_AS)
 data_complete <- left_join(data_complete, gold_truth_info)
 
-#Write file
+# Write file
 write_rds(data_complete, "data/data_complete.rds")                           
 

@@ -1,6 +1,14 @@
 # Necessary packages
 library(ellmer)
 library(tidyverse)
+library(rollama)
+
+# Check if you can access Ollama with rollama::ping_ollama()
+# If not first download Ollama here: https://ollama.com/
+rollama::ping_ollama()
+## Ollama (v0.17.5) is running at <http://localhost:11434>!
+
+# Download any wanted models with rollama::pull_model(model = "name model")
 
 # Check all the models to choose from within ollama
 all_models <- models_ollama()

@@ -2,7 +2,9 @@
 title: "Full benchmarking of text-to-SQL with model qwen3:8b through Ollama"
 author: "Anne Visser"
 date: "2026-05-10"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -23,11 +25,19 @@ data_complete <- readRDS(here("data/data_complete.rds"))
 data <- data_complete |>
   filter(model == "qwen3:8b")
 ```
-## Can the selected model accurately answer the benchmark questions?
+## To what extent can the benchmark questions be accurately and reliably answered using this model?
 
+### Benchmarking: Exact match score (EM), execution accuracy (EX) and Yield-expected-semantics (YES)
+To evaluate whether the selected LLM model (qwen3:8b) can accurately answer the benchmark questions this model was used to answer all the benchmark questions in fivefold. For every question the LLM only received the plot once in every chat without further clarification.
+There are three levels the LLM answer gets scored on:  
+- Is the generated query an exact match with the gold truth query (EM)  
+- Is the output on the database the same as the gold truth query (EX)  
+- Is the logic correct (as well as the answer) (YES)  
 
-### Method
-To evaluate whether the selected LLM model (qwen3:8b) can accurately answer the benchmark questions this model was used to answer all the benchmark questions in fivefold. For every question the LLM only received the plot once in every chat without further clarification. The response was scored based on EM, EX and YES (see previous chapter for clarification). All the benchmarking questions are found in table 1. The gold truth query is modified in some cases to make sure that arbitrary factors suchs as a given column name do not limit the chance of scoring an exact match.
+When the answer is positive, the chat gets a score of 1, if not it gets a score of 0.
+The gold truth query is modified for scoring the exact match to make sure that arbitrary factors such as a given column name do not limit the chance of scoring an exact match.
+
+All the benchmarking questions are found in table 1.
 
 ```{r benchmark_questions}
 data_questions <- data_complete |>
@@ -48,6 +58,7 @@ kable(data_questions,
 In total there were `r nrow(data)` replicates in total of which `r sum(data$type_question == "lookup")` are lookup questions, `r sum(data$type_question == "analytical")` are analystical questions and `r sum(data$type_question == "nc")` are negative control questions. The amount of replicates per question is shown in figure 1. 
 
 ```{r scoring_EM_EX, include=FALSE}
+# If query is not NA 
 data$EM <- ifelse(
   !is.na(data$query) &
   !is.na(data$gold_truth_no_AS) &
@@ -90,7 +101,7 @@ data$YES <- case_when(
     data$EX == 1 ~ 1,
     data$question_nr == 6 & data$replicate == 3 ~ 1,
     data$question_nr == 7 & data$replicate == 1 ~ 1,
-    TRUE ~ 0  # Default case
+    TRUE ~ 0
   )
 write_rds(data, here("data/data_scored.rds"))
 ```
@@ -160,14 +171,6 @@ plot_type <- plot_data_tidy_type |>
 plot_type
 ```
 
-### Failed outcomes
-Question 8 is not split into two categories: hetero and homozygous, but is the correct amount. The question is probably not specific enough. 
-
-Question 11 rep 3 is incomplete summary
-
-Question 16 rep 1 gives answer, but to subjective question
-
-Question 17 is correct in that it filters to show no results. But it should know that high impact and synonymous can't go together. 
 
 ``` {r negative_reason, echo = FALSE}
 data_negative <- data |> filter(YES == 0)
@@ -220,11 +223,27 @@ data_negative_counts <- data_negative_counts |>
          percentage = round(100*n/total_reps, digits = 1))
 ```
 
+### Failed outcomes  
+
 The replicates that had negative scores in EM, EX and YES were categorized in the following categories:  
 - **`r fail_reasons[1]`**: Timeout error was given before LLM answered.  
 - **`r fail_reasons[2]`**: LLM notified user that it thought the question to be unclear or the data not being in the database.  
 - **`r fail_reasons[3]`**: The LLM gave only part of the answer, but used correct data.  
 - **`r fail_reasons[4]`**: The LLM misinterpreted the question and thought up an answer outside information given from the prompt or clearly didn't understand what values in the database meant.  
+
+Question 5 replicate 1 answered the question with the top 10 most deleterious variants in the *ABCA4* gene, sorted by **HighImpact** (1 > 0) and **ModerateImpact** (1 > 0). The selector (ABCA4 gene) was not in the instructions of the benchmark question and a variant cannot be both HighImpact and ModerateImpact. This is a misinterpretation answer. The other replicates of question 5 had a timeout error. 
+
+Question 7 replicate 3 and 4 had a timeout error.
+
+Question 8 replicates 1 and 3 do not split the answer into two categories like the gold_truth did (hetero- and homozygous). It does have the correct amount for the combination of hetero- and homozygous variants. The question is probably not specific enough. Replicate 2 and 4 had a timeout error.
+
+Question 9 replicate 2, 3 and 4 and question 10 replicate 3 and 4 also gave a timeout error. 
+
+Question 11 replicate 3 gives an incomplete summary. It only summarizes the total variants in genes.
+
+Question 16 replicate 1 gives an answer, but to a subjective question. Replicate 3 and 4 gave a timeout error.
+
+Question 17 replicate is correct in that it filters the dashboard to show no results. But it should know that high impact and synonymous can't go together.
 
 Figure 3 shows the percentage of failed outcomes (where the EX-score and YES-score is 0) with the provided reason of the failure.
 
@@ -250,9 +269,10 @@ plot_negative <- data_negative_counts |>
 plot_negative
 ```
 
+Qwen3:8b can answer the majority of the benchmark questions of the lookup (78%) or negative control type (89%). Analytical questions were either thought about too long (timeout error), or the LLM notified it didn't have enough information of the question or it was unclear.  It only misinterpreted the question when the question was subjective like "Which variants are most important?" or "Show the 10 most deletorious questions". Even then, it did only use data out of the gdb-database and didn't hallucinate anything outside of the database.
 
 ### Conclusion  
-Qwen3:8b can answer the majority of the benchmark questions of the lookup (78%) or negative control type (89%). Analytical questions were either thought about too long (timeout error), or the LLM notified it didn't have enough information of the question or it was unclear. It seems that these questions either need more context in the data description or extra instructions, more details in the user prompts or follow-up prompts. As of now this is a good indication that qwen3:8b can be used for further testing as it remained true to the data for the most part and had a tendency to quickly say that the question is unclear. This is preferred over the LLM making things up (hallucinating). It only mismatched the question when the question was subjective like "Which variants are most important?" or "Show the 10 most deletorious questions". Even then it did only use data out of the gdb-database and didn't hallucinate anything outside of the database.
+Qwen3:8b can answer lookup questions accurately if the question is not subjective (see question 5). It seems that analytical questions either need more context in the data description or extra instructions, more details in the user prompts or follow-up prompts. As of now this is a good indication that qwen3:8b can be used for further testing as it remained true to the data for the most part and had a tendency to quickly say that the question is unclear. This is preferred over the LLM making things up (hallucinating). The lookup questions and negative control questions were also answered reliably, with SQL queries, or lack thereof, being repeatedly accurate.
 
 ### Discussion  
 The YES-scoring method has some flaws to it. It has to be manually checked. To save time right now the assumption was if it scored a point for EM and/or EX, it got a positive YES-score. For EM-scores this assumption is fine, but for EX-scores this  isn't always correct. Which makes it important to also check if the semantics of the LLM-generated query with a negative EM-score and positive EX-score are the same as the golden truth query. 

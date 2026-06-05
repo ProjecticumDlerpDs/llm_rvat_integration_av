@@ -3,8 +3,8 @@ title: "Selecting LLM model"
 author: "Anne Visser"
 date: "2026-04-27"
 output: 
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 <style>
 pre {
@@ -34,8 +34,8 @@ output_gold_truth_1 <- dbGetQuery(gdb, gold_truth_1)
 output_gold_truth_2 <- dbGetQuery(gdb, gold_truth_2)
 ```
 
-## Which LLM model within ollama is most suitable for creating SQL-queries through querychat's user input?
-In this RMarkdown document the goal is to select an LLM-model to use for the querychat -RVAT prototype. First popular LLM models under 7 Gb were used for coding and with high text-to-SQL benchmarks were installed through Ollama. The size restriction was done so it would be realistic to use the model on a desktop computer, making the eventual tool more accessible for researchers. Of these models, only the ones with toolcalling capabilities were selected, since that is a requirement for the use of querychat. Toolcalling is used to run the SQL query in the shiny app and returning the data through an updated table or through sending the aggregation data to the LLM.
+## Which LLM model within Ollama is most suitable for generating SQL queries within Querychat?
+In this RMarkdown document the goal is to select an LLM-model to use for the querychat -RVAT prototype. First, popular LLM models under 7 Gb used for coding and with high text-to-SQL benchmarks, were installed through Ollama. The size restriction was done so it would be realistic to use the model on a desktop computer, making the eventual tool more accessible for researchers. Of these models, only the ones with toolcalling capabilities were selected, since that is a requirement for the use of querychat. Toolcalling is used to run the SQL query in the shiny app and returning the data through an updated table or through sending the aggregation data to the LLM.
 
 ```{r models, include=FALSE}
 all_models <- ellmer::models_ollama()
@@ -45,9 +45,9 @@ possible_models <- all_models |>
 possible_models |> select(id, capabilities)
 ```
 
-### Answering: Select number of variants in NEK1
+### Answering benchmark question 1: Select number of variants in NEK1
 These models were used for a rough selection for the best model to use in the rest
-of the analysis. After answering the prompt "Select number of variants in NEK1" 5 times it was determined if how often this resulted in a succesful toolname, showing a succesful toolcall. Toolnames in querychat could either be querychat_query for aggregating or querychat_update_dashboard for selecting and filtering. Of the seven possible models only four had successful tool calling results, recognized by the presence of tool_name and query. Which 
+of the analysis. After answering the prompt "Select number of variants in NEK1" 5 times it was determined how often this resulted in a succesful toolname, showing a succesful toolcall. Toolnames in querychat could either be querychat_query for aggregating or querychat_update_dashboard for selecting and filtering. Of the seven possible models only four had successful tool calling results, recognized by the presence of tool_name and query. This 
 concurs with the warning on ellmer's chat_ollama page where it says tool calling
 seems quite weak (https://ellmer.tidyverse.org/reference/chat_ollama.html).
 
@@ -74,9 +74,9 @@ knitr::kable(succesful_toolcalls_tbl,
 
 ### Exact match score (EM), execution accuracy (EX) and Yield-expected-semantics (YES)
 It is important to not only have a succesful toolcall, but also the most accurate result. There are three levels the LLM answer gets scored on:  
-- Is the generated query an exact match with the benchmark query (EM)
+- Is the generated query an exact match with the benchmark query (EM)  
 - Is the output on the database the same as the benchmark query (EX)  
-- Is the logic correct (as well as the answer) (YES) 
+- Is the logic correct (as well as the answer) (YES)  
 
 When the answer is positive, the chat gets a score of 1, if not it gets a score of 0.
 
@@ -114,7 +114,7 @@ data_EM_EX_tbl <- data_EM_EX |>
   select(chat_ID, model, query, EM, EX)
 ```
 
-After this the output of the SQL queries and outputs from the chats with a zero in exact match and excecution accuracy are manually scored. Below you can see the answers of the LLM's in these chats.
+After this, the output of the SQL queries and outputs from the chats with a zero in exact match and excecution accuracy are manually scored. Below you can see the answers of the LLM's in these chats.
 ```{r data_yes, error=TRUE}
 data_YES_0 <- data_EM_EX |> 
   filter(EX == 0)
@@ -129,9 +129,11 @@ query_20 <- data_EM_EX$query[data_EM_EX$chat_ID == 20]
 
 # These queries were than checked through (dbGetQuery(gdb, query))
 ```
-Chat_ID 17 cleary had the wrong answer. The right answer should say there are 190 variants in NEK1. Chat_ID 18 gives a list with 190 variants, which is correct but it counts the allel counts(AC) not the variants. Which is why it doesn't get a point for right logic. The query of chat_ID 19 gives an error, because it is not complete. Notice the gene name is not in the query.  
+Chat_ID 17 and 18 cleary had the wrong answer. The right answer should say there are 190 variants in NEK1. Chat_ID 17 doesn't count the unique VAR_id, but it counts ID, which is a column that gives the ID of known variants that already received an ID in other databases. Chat_ID 18 counts the allel counts(AC) not the variants. The query of chat_ID 19 gives an error, because it is not complete. Notice the gene name is not in the query.  Which is why these don't get a point for right logic.  
 
-Chat_ID 20 gives the correct answer + an extra column with the gene name. This is the correct logic, plus something extra that is also correct which is why it gets a point for correct logic (YES). See the output in table 3.
+Chat_ID 20 gives the correct answer + an extra column with the gene name. This is the correct logic, plus something extra that is also correct which is why it gets a point for correct logic (YES). See the output in table 3.  
+
+
 ```{r output_20, error=TRUE}
 output_20 <- dbGetQuery(gdb, query_20)
 kable(output_20, format = "html",
@@ -157,12 +159,12 @@ data_scored_sum <- data_scored |>
             sum_EX = sum(EX),
             sum_YES = sum(YES)
             )
-kable(data_scored_sum, 
-      caption = "Table 4: Scores for LLM models with succesful toolcalls. The same prompt was asked 5 times. Working_query refers to if the query returns output or not.",
-      format = "html") |>
-  kable_styling()
+# kable(data_scored_sum, 
+#      caption = "Table 4: Scores for LLM models with succesful toolcalls. The same prompt was asked 5 times. Working_query refers to if the query returns output or not.",
+#      format = "html") |>
+#  kable_styling()
 ```
-If all replicates have a 1 in yes score the chat is succesful. Here we see that both llama3.1:8b, qwen3:8b and qwen3.5 gave the right answers when counting the YES score. Where the first one also had 2 exact matches but did have 1 toolcall failure. Qwen3.5 and qwen3:8b had no toolcall failures and delivered 4 execution accuracy scores and 1 not with the exact same output because there was a column with 'gene_name' along with variant count.
+If all replicates have a 1 in yes score the chat gave the correct answer. Here we see that both qwen3:8b and qwen3.5 gave the right answers when counting the YES score. Llama3.1:8b has an 80% YES-score, but did have 1 unsuccesful toolcall. Of the succesful toolcalls it had 2 exact matches and 2 execution accuracy scores. Qwen3.5 and qwen3:8b had no toolcall failures and delivered 4 and 5 execution accuracy scores respectively. Qwen3.5 had 1 chat where the EX was negative, but the YES was positive. As seen in table 3. Figure 1 shows the percentage of positive scores (EM, EX and YES) in the 4 different models. 
 
 ``` {r sum_graph}
 data_scored_sum_tidy <- data_scored_sum |>
@@ -173,7 +175,11 @@ data_scored_sum_tidy <- data_scored_sum |>
 data_scored_sum_tidy |>  ggplot(aes(x = model, y = percentage, fill = score)) +
     geom_col(position = position_dodge()) + 
   labs(title = "Benchmarking scores of 4 different LLM models used through ollama",
-       x = "LLM model (from ollama)")
+       x = "LLM model (from ollama)",
+       y = "Percentage positive scores",
+       caption = "Figure 1: Benchmarking scores of 4 LLM models (from Ollama) answering benchmarkquestion 1: 'Select number of variants in NEK1") +
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 0))
 ```
 
 ### Negative control questions
@@ -244,7 +250,12 @@ cat(qwen35_response)
 This indicates qwen3.5  still tried to make a query, it was just not the correct format to be accepted by querychat.
 
 ### Conclusion
-Of the 4 models with working toolcalls, 2 are not suitable for creating accurate SQL-queries for the RVAT-database table: llama3.2 and llama3:8b. The first model only returned a correct SQL-query 40% of the replicates. Llama3:8b had 1 non-working toolcall and answered all the unanswerable questions. 
-That leaves both qwen models as the most suitable. Both models are very similar, but in the control questions it stands out that qwen3:8b gives shorter, clearer answers and doesn't try to run nonsense queries. Because of this qwen3:8b will be chosen as the model for further analysis. This model not only is the most suitable compared to the other models, but with a 100% execution accuracy (EX) for question 1 and consistently noticing the negative control questions were unanswerable, it answered every question following instructions. 
+Of the 4 models with working toolcalls, 2 are not suitable for creating accurate SQL-queries for the RVAT-database table: llama3.2 and llama3:8b. The first model gave false SQL-queries and the second answered unanswerable questions. 
+That leaves both qwen models as the most suitable. Qwen3:8b gives shorter, clearer answers in the control questions. Because of this qwen3:8b will be chosen as the model for further analysis. This model not only is the most suitable compared to the other models, but with a 100% execution accuracy (EX) for question 1 and consistently noticing the negative control questions were unanswerable, it answered every question following instructions. Making it the most accurate model of the 7 models that were analysed.
 
-There was no measure on time efficiency. While running the prompts it took at least 1-2 minutes to generate a SQL-query this impacts the usability of the prototype. Possibly this can improve with a larger LLM model with greater thinking power. 
+### Discussion
+There was no measure on time efficiency. While running the prompts it took at least 1-5 minutes to generate an SQL-query. This impacts the usability of the prototype. Possibly this can improve with a larger LLM model with greater thinking power. 
+Time impacted the sample size of the benchmark questions. Due to time constraints only one questions was asked from the lookup question. To get a good idea of the performances of the LLM's it was decided that a question with a single parameter (like question 1) would showcase the LLM's that weren't able to answer this question accurately so these LLM's could be eliminated. The negative control questions provided insight to the hallucination tendency of the LLM's. In this case there were clear differences even within the small sample size. However, it would be better to do a full analysis with the 4 models that had succesful toolcalls.
+Within Ollama there is the option to customize your own LLM-model. Constructing a model specifically built for RVAT's database would make sure that the LLM doesn't need as much instructions and would possibly be more accurate than a generic model. 
+A next step could be to compare this model to Qwen3:8b.
+
