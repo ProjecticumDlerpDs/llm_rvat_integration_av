@@ -7,7 +7,7 @@ output:
   pdf_document: default
 ---
 
-```{r setup, include=FALSE}
+```{r setup3, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(tidyverse)
 library(here)
@@ -28,7 +28,7 @@ data <- data_complete |>
 ## To what extent can the benchmark questions be accurately and reliably answered using this model?
 
 ### Benchmarking: Exact match score (EM), execution accuracy (EX) and Yield-expected-semantics (YES)
-To evaluate whether the selected LLM model (qwen3:8b) can accurately answer the benchmark questions this model was used to answer all the benchmark questions in fivefold. For every question the LLM only received the plot once in every chat without further clarification.
+To evaluate whether the selected LLM model (qwen3:8b) can accurately answer the benchmark questions this model was used to answer all the benchmark questions in fivefold. For every question the LLM only received the prompt once in every chat without further clarification.
 There are three levels the LLM answer gets scored on:  
 - Is the generated query an exact match with the gold truth query (EM)  
 - Is the output on the database the same as the gold truth query (EX)  

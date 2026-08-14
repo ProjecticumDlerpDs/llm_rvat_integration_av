@@ -1,0 +1,803 @@
+---
+title: "Integrating RVAT's database in querychat using ollama"
+author: "Anne Visser"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+---
+<style>
+@media print {
+  @page {
+    @bottom-center {
+      content: counter(page);
+    }
+  }
+}
+</style>
+```{r setup1, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(ellmer)
+raw_data <- readRDS(here("data/raw_data.rds"))
+data_complete <- readRDS(here("data/data_complete.rds"))
+new_variables <- setdiff(colnames(data_complete), colnames(raw_data))
+```
+```{r setup2, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(here)
+library(ellmer)
+library(rvat)
+library(rvatData)
+library(DBI)
+library(knitr)
+library(kableExtra)
+library(ggsignif)
+outdir <- tempdir()
+gdb <- gdb(rvat_example("rvatData.gdb"))
+data_complete <- readRDS(here("data/data_complete.rds"))
+gold_truth_1 <- "SELECT COUNT(VAR_id) AS number_of_variants FROM varInfo_synthetic WHERE gene_name = 'NEK1'"
+output_gold_truth_1 <- dbGetQuery(gdb, gold_truth_1)
+```
+```{r setup3, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(here)
+library(ellmer)
+library(rvat)
+library(rvatData)
+library(DBI)
+library(kableExtra)
+library(ggsignif)
+library(forcats)
+library(wesanderson)
+outdir <- tempdir()
+gdb <- gdb(rvat_example("rvatData.gdb"))
+data_complete <- readRDS(here("data/data_complete.rds"))
+data <- data_complete |>
+  filter(model == "qwen3:8b")
+```
+
+### Introduction
+This project aims to make a sequencing database containing data from ALS patients more accessible to researchers.
+
+#### ALS
+
+Amyotrophic lateral sclerosis (ALS) is a progressive disorder that begins in adulthood. The disease causes motor neurons to deteriorate, leading to muscle atrophy and ultimately the loss of essential functions such as breathing. Life expectancy from the onset of symptoms averages between 2 and 5 years (Van Damme et al., 2024). Treatments are aimed at alleviating symptoms and slowing the progression of the disease. In the Netherlands, the incidence is 3 per 100,000 people, and it is the cause of death for 1 in 300 Dutch people (ALS Center, 2023). The cause of ALS is not yet fully understood (Van Damme et al., 2024). However, it is known that there is a significant genetic component and that environmental factors also play a role (Al-Chalabi et al., 2013; Spencer et al., 2023). In approximately 10% of cases, the condition is familial ALS. More than 40 genes have now been identified that are associated with ALS. The best known are C9orf72, SOD1, FUS, and TARDBP (Wang et al., 2023). In the remaining cases, the condition is sporadic ALS, which is not hereditary; however, genetic variations in the C9orf72 gene are observed in 5%–10% of these cases (Masrori, 2020). In addition, epigenetics appears to play a role (Tarr et al., 2019). There is considerable heterogeneity in the genes involved, and there are significant differences across demographic regions. For example, the SOD1 mutation was significantly less common in the Netherlands than in other locations (Van Es et al., 2010).
+
+To better understand the onset and progression of the disease, as well as the development of new treatments, it is important to better characterize the genetic components of the disease.
+
+
+
+#### Association Analyses
+
+Thanks to whole-genome and whole-exome sequencing, an large amount of data is now available for conducting association studies such as Genome-Wide Association Studies (GWAS) or Rare Variant Association Analysis (RVAA), which identify genes potentially involved in diseases (such as ALS) by comparing them to a reference genome from individuals without the disease (Lee et al., 2014). Gene variations found in ALS patients can thus be analyzed. For example, it is possible to investigate which genes are associated with the development of (certain forms of) ALS. Given the high heterogeneity within the genetic variations of ALS patients, these are often rare variations that are difficult to detect in association studies such as GWAS (Lee et al., 2014).
+RVAA focuses on investigating these types of rare variants in the genome (Lee et al., 2014). By grouping rare variants based on location (such as a gene or functional domain) and testing them collectively using statistical tests such as burden tests or sequence kernel association tests (SKAT-O), the probability of detection increases (Lee et al., 2014; Hop et al., 2026). This allows for a better understanding of whether variations in certain genes increase the likelihood of specific disease phenotypes.
+
+<div style="page-break-after: always;"></div>
+
+#### VCF
+
+To perform an association analysis, the data must be stored in a format that allows for analysis. A commonly used file format is the Variant Call Format (VCF).
+
+This is a file in which genetic variants can be recorded (Samtools, 2024).
+
+This file contains information about the variant, including the chromosome (CHROM), the position on the chromosome (POS), the ID number (ID) if it is a known variant in NCBI, the nucleotide(s) in the reference genome (REF), the variation in the sample genome (ALT),  the read quality score (QUAL), the quality cutoff or other filters (FILTER), annotation information (INFO), sample data structure (FORMAT), and one or more sample columns (in this case, NA00001 through NA00003) (Samtools, 2024).
+
+#### RVAT
+
+However, a VCF file is not an efficient format for performing RVAA. For this reason, the Rare Variant Association Toolkit (RVAT) was developed by Hop et al. (2026). This R package converts the VCF file into an SQLite database and then analyzes and visualizes it according to the RVAA protocol.
+
+Furthermore, the database (gdb) is much smaller than a VCF file. This makes it more accessible to researchers. Thanks to the smaller file sizes, they can consult the database on a standard device. However, code still needs to be written for search queries. This project aims to find out if a large language model (LLM) could make these search queries faster and more accessible by translating a natural-language prompt into an SQL query (text-to-SQL).
+
+#### Large language models and Ollama
+
+A large language model is a form of artificial intelligence that has been trained on large amounts of data to recognize and understand language patterns (Naveed et al., 2025). Well-known examples include OpenAI’s ChatGPT and Google’s Gemini. For example, a user can chat with a large language model. In this project, it is important that the LLM used cannot utilize the data for any purpose other than the project itself. To achieve this, we aim to work with a local LLM. Ollama is a program that allows users to download various LLM models locally. By using the model locally, the input data remains within the local LLM (Ollama, n.d.).
+
+#### Querychat
+
+One possible R package that will be the focus of the project is querychat. Querychat can connect an LLM to an SQLite database is Querychat (Aden-Buie et al., 2026). Using this package minimizes the amount of data shared with the LLM. Querychat connects the components and integrates them into an interactive dashboard. This dashboard displays a chat box and a table from the database. The user can ask a question in the chatbox (a natural language prompt). 
+Querychat also sends a system prompt to the LLM that includes the structure and context of the dataset. With this information, the LLM can then generate an SQL query. In this way, the full data does not reach the LLM, as only the data’s structure is passed on. However, when summary or other aggregation questions are asked, the LLM does receive the answer. For example, if the LLM needs to count how many variants occur in a single gene, it receives the answer via Querychat.
+
+The goal of this project is to establish a proof of principle prototype that connects the RVAT-database to querychat using ollama. 
+
+To achieve this goal the following questions were asked.  
+  
+<div style="page-break-after: always;"></div>
+
+### Main question  
+To what extent is it possible to generate reliable and accurate SQL queries for an RVAT database (gdb) via natural language prompts when using QueryChat with Ollama as the client?
+
+#### Sub-questions    
+The sub-questions are divided into questions for exploring Ollama and the used R-packages, building a pipeline for the desired Querychat app (prototype), and the performance of the LLM models used within the prototype (benchmarking).
+
+
+##### Exploring Ollama and R packages
+
+1. How does Ollama work within an R environment?
+
+2. How does Querychat work with Ollama as a client?
+
+3. What requirements must a database meet to be compatible with Querychat?
+
+4. How is the RVAT database generated and how is it customizable?
+
+
+##### Pipeline prototype
+
+5. How can Querychat be connected to the RVAT database?
+
+6. How can the chat history be saved for analysis?
+
+
+##### Benchmarking large language models within Ollama
+7. Which LLM model within Ollama is most suitable for generating SQL queries within Querychat?
+
+8. To what extent can the benchmark questions be accurately and reliably answered using this model?
+
+
+
+## Method
+With the exception of installing Ollama (Ollama, n.d.), all experiments and products are carried out using R scripts in RStudio. 
+To ensure reproducibility, a GitHub repository is used. Version control for scripts and documents is handled using Git. Version control for the packages used is managed using ‘renv’. 
+
+### Exploring Ollama and R Packages
+To answer the first four sub-questions, the tutorials for the relevant R packages were used:
+The Ollama quickstart (Ollama, n.d.), the Querychat tutorial (Aden-Buie et al., 2026) using the Palmer penguin dataset (Horst et al., 2020), and the “Getting Started” chapter of the RVAT tutorial (Kenna et al., 2026).  The R packages Ollama (Gruber et al., 2026) and Ellmer (Wickham et al., 2026) were used to control Ollama via RStudio. 
+The tutorials served as a positive control. 
+
+### Pipeline prototype
+The findings from the tutorials are used to link the RVAT database (gdb) to Querychat. A custom dummy data table was used as database which included both genotype and variant information. This was done to resemble the information in the gdb while still meeting the requirements of querychat.
+Using the shiny app tutorial (Chang et al, 2026),  a button was made within the user interface to save the chat history. The coding for the function needed was created with the use of Mistral's LeChat. The prompt used is in *"prototype/prompts/logging_function_prompt.txt"*.
+
+<div style="page-break-after: always;"></div>
+
+### Benchmarking large language models within Ollama  
+
+Using the information from the completed tutorials, 7 Ollama models—each under 10 GB—are downloaded. By selecting small LLM models, the platform becomes more accessible to researchers who want to use the LLM on their own devices.
+
+Kenna Lab has provided 17 benchmark questions with corresponding SQL queries (gold-truth queries). These include lookup, analytical, and negative control questions.
+**Lookup questions** are those that do not require data aggregation. For example, a question might ask to select variants within a specific gene.
+**Analytical questions** do involve aggregation; for example, a question might ask for the average number of allele frequencies.
+**Negative control questions** are those that cannot be answered using the linked database. 
+
+All the benchmarking questions are found in table 1.
+
+```{r benchmark_questions}
+data_questions <- data_complete |>
+  filter(!is.na(data_complete$prompt)) |>
+  select(question_nr, type_question, prompt) |>
+  distinct()
+
+data_questions <- sort_by(data_questions, ~ question_nr)
+
+kable(data_questions, 
+      format = "html",
+      caption = "Table 1: Benchmarking questions with the question type used in benchmarking qwen3:8b model") |>
+  kable_paper()
+```
+
+To filter out a suitable model, the first question from the lookup questions is asked 5 times, and all negative control questions are asked once. The selected model is the one with the highest score. Based on this, the full benchmark analysis was performed by using all benchmark questions as prompts five times.
+
+<div style="page-break-after: always;"></div>
+
+For each benchmark question, gold-standard SQL queries are compared with the queries generated by Querychat. They are evaluated based on the following parameters, with a scoring system of TRUE = 1 and FALSE = 0.
+
+**Exact match (EM)**: Is the generated SQL query string identical to the gold-standard SQL query? 
+
+**Execution accuracy (EX)**: Is the output of the generated SQL query the same as the output of the gold standard SQL query?
+
+**Yield-expected-semantics (YES)**: Does the logic of the entire query match what it should be (for example, if x must be 10 or greater, does the query return “x > 10” or “x >= 10”)?
+
+EM and EX are based on the SQL-to-text benchmark SPIDER (Yu et al., 2018), and the YES parameter is based on a paper by Singh et al. (2026). The YES parameter was added because a critical issue with SPIDER is that there may be false negatives when scoring only EX and EM (Singh et al., 2026).
+These scores are than translated to a percentage of positive (TRUE) scores per question type. 
+The replicates that had negative scores in EM, EX and YES were categorized in the following categories:  
+- **timeout**: Timeout error was given before LLM answered.  
+- **unclear question**: LLM notified user that it thought the question to be unclear or the data not being in the database.  
+- **incomplete answer**: The LLM gave only part of the answer, but used correct data.  
+- **misinterpreted**: The LLM misinterpreted the question and thought up an answer outside information given from the prompt or clearly didn't understand what values in the database meant.
+  
+    
+
+## Results
+
+### Exploring Ollama and R Packages
+The tutorials are in the folder *"/tutorials*. All packages, and therefore the positive controls, worked in the used environment (requirements are mentioned in README). 
+
+### Pipeline prototype  
+The prototype querychat app with the logging function is found in the folder *"/prototype* with the used prompts in *"/prototype/prompts*. The README shows a quickstart to setup the querychat app. Within the querychat app the greeting prompt (*'protoype/prompts/greeting.md'*) makes all the benchmark questions clickable, making sure that all replicates have the exact same questions. There is also a prompt to provide context for the data structure *'protoype/prompts/data_description.md'* and extra instructions *'protoype/prompts/extra_instructions.md'*. In the extra instructions the LLM is prompted to make written answers short (as the SQL-query is the main goal) and answer with "The question is not clear or this information is not available in the database." when it is not sure it has all the information.
+
+To make storing the data easier a button was made within the querychat app to save the chat history. This button is a so called 'reactive value' within the Shiny app (https://shiny.posit.co/r/articles/build/reactivity-overview/). Whenever an event happens to this object, a reaction will follow using the shiny app function observeEvent().  
+In this case the reaction is getting the history of the current chat by accessing the Ellmer function get_turns() within the querychat app and turning this into a table where each row contains information of a complete cycle. A cycle starts with a user question (in this case a benchmark question) and ends with the LLM answer to the question.
+The get_turns() function is accessed through the shiny app server by utilizing the querychat reactive value 'client'. Notice the code below can only be used inside the querychat app server (step 3 in *"prototype/3_querychat_app_setup.R"*). `qcvals` contains the reactive values within querychat. 
+
+``` {r names_do_not_include, echo= TRUE, eval=FALSE}
+# Show reactive values within the querychat app.
+names(qcvals)
+## [1] "client" "sql"    "title"  "df" 
+
+# The client is the chat object used (in this case the ellmer chat object)
+class(qcvals$client)
+## [1] "Chat" "R6" 
+
+# Within this chat object there are several functions that can be used:
+names(qcvals$client)
+##  [1] "stream_async"          "stream"                "set_turns"            
+##  [4] "set_tools"             "set_system_prompt"     "register_tools"       
+##  [7] "register_tool"         "on_tool_result"        "on_tool_request"      
+## [10] "last_turn"             "initialize"            "get_turns"            
+## [13] "get_tools"             "get_tokens"            "get_system_prompt"    
+## [16] "get_provider"          "get_model"             "get_cost"             
+## [19] "clone"                 "chat_structured_async" "chat_structured"      
+## [22] "chat_async"            "chat"                  "add_turn"             
+## [25] ".__enclos_env__"   
+
+```
+
+
+The variables extracted from the chat history are shown below:  
+
+**`r colnames(raw_data)[1]`**: The question asked by the user.  
+**`r colnames(raw_data)[2]`**: The SQL-query generated by the LLM.  
+**`r colnames(raw_data)[3]`**: The name of the tool used.  
+**`r colnames(raw_data)[4]`**: If there is an error when running the tool the error is shown.  
+**`r colnames(raw_data)[5]`**: The LLM model used.  
+**`r colnames(raw_data)[6]`**: Total user/assistant turns (normally 4 turns: 1) The user prompt. 2) The LLM starting the tool call. 3) The toolcall information is returned to LLM. 4) The answer the LLM gives to the user). More turns are possible when the LLM didn't return a working query the first time.  
+**`r colnames(raw_data)[7]`**: The response the LLM gives in the chatbox.  
+**`r colnames(raw_data)[8]`**: The replicate number. This needs to be manually edited in the *"prototype/3_querychat_app_setup.R"* script.  
+**`r colnames(raw_data)[9]`**: A timestamp to see what time and date the 'Save Chat History' button was clicked, to make it easier to check where the data fits in the timeline if any changes were made in the context for instance.   
+
+#### Enriching and cleaning raw data
+
+In the script *"4_making_data_complete"* the raw data is cleaned and enriched. First the following variables were added:  
+
+**`r new_variables[1]`**: Each question gets a number for easy filtering.  
+**`r new_variables[2]`**: Chat cycles with timeout errors were not shown when clicking 'Save Chat History' button so had to be added manually. The fail_reason gives reason timeout for these chat cycles.  
+**`r new_variables[3]`**: The question type is added per question.  
+**`r new_variables[4]`**: The gold truth is the/a correct SQL-code, these were provided with the benchmark questions. These can be used to generate the golden truth output to compare to the output of the LLM query.  
+**`r new_variables[5]`**: The gold truth without AS. In SQL 'AS' is used to name a column when aggregating data. In the gold_truth_no_AS variable, the gold truth is copied but the AS command is skipped. This is to prevent a low exact match score for the sole reason of query having a different generated column name. For instance when the gold_truth names a column where variants are counted var_count and the LLM names the column 'variant_count', but the rest of the query is the same, this will still give an exact match score when using gold_truth_no_AS to compare the LLM SQL-query to. 
+
+After enriching, the script cleans the data.  It only keeps complete cycles (these are recognized by having a model name present) and cycles with benchmark questions (recognized by not having a question number). It also gets rid of any duplicate rows (exlcuding the timestamp) that are present when the 'Save Chat History' button is clicked more than once in a session. The table is then written to *"data/data_complete.rds"*, leaving the raw data file intact.
+
+
+### Benchmarking large language models within Ollama 
+#### Selecting LLM model
+First, popular LLM models under 7 Gb used for coding and with high text-to-SQL benchmarks, were installed through Ollama. Of these models, only the ones with toolcalling capabilities were selected, since that is a requirement for the use of querychat. Toolcalling is used to run the SQL query in the shiny app and returning the data through an updated table or through sending the aggregation data to the LLM.
+
+```{r models, include=FALSE}
+all_models <- ellmer::models_ollama()
+all_models |> select(id, capabilities)
+possible_models <- all_models |>
+  filter(str_detect(capabilities, "tools"))
+possible_models |> select(id, capabilities)
+```
+
+##### Answering benchmark question 1: Select number of variants in NEK1
+These models were used for a rough selection for the best model to use in the rest of the analysis. After answering the prompt "Select number of variants in NEK1" 5 times it was determined how often this resulted in a succesful toolname, showing a succesful toolcall. Toolnames in querychat could either be querychat_query for aggregating or querychat_update_dashboard for selecting and filtering. Of the seven possible models only four had successful tool calling results, recognized by the presence of tool_name and query. This 
+concurs with the warning on ellmer's chat_ollama page where it says tool calling
+seems quite weak (https://ellmer.tidyverse.org/reference/chat_ollama.html). The chats with the 4 models with succesful toolcalls were given scores for their performance. Table 2 shows the number of succesful toolcalls for each model.
+
+```{r data_complete_question1, include=FALSE}
+data_complete_1 <- data_complete |> 
+  mutate(chat_ID = row_number()) |>
+  filter(question_nr == 1) |>
+  select(chat_ID, model, tool_name, query, assistant_text)
+```
+
+
+```{r table_succesful_toolcalls}
+succesful_toolcalls_tbl <- data_complete_1 |> 
+  group_by(model) |>
+  summarise(succesful_toolcalls = sum(!is.na(tool_name))
+  )
+knitr::kable(succesful_toolcalls_tbl, 
+             caption = "Table 2: LLM models with the amount of succesful toolcalls within 5 chats with the prompt 'Select number of variants in NEK1",
+             ) |>
+  kable_styling()
+  
+```
+
+One thing of note is that the time to return an answer was several minutes (between 1 and 5). This was not officially measured.
+The exact match score (EM) is given when the benchmark query is the same as the query the LLM provided in the chat.
+The benchmark query (gold truth) for this question is:  
+**"SELECT COUNT(VAR_id) AS number_of_variants FROM varInfo_synthetic WHERE gene_name = 'NEK1'"**. In this case **'AS number_of_variants'** doesn't need to be exactly the same since this is only a column name to store the answer to the query in.
+
+```{r correct_answer}
+query_1 <- "SELECT COUNT\\(VAR_id\\)\\s*(?:AS\\s+\\w+\\s+)?FROM varInfo_synthetic WHERE gene_name = 'NEK1'"
+data_toolcall_1 <- data_complete_1 |>
+  filter(tool_name != "") |>
+  select(chat_ID, model, tool_name, query, assistant_text)
+question1_em <- data_toolcall_1$query |> str_detect(regex(query_1))
+data_EM <- data_toolcall_1 |>
+  mutate(EM = if_else(question1_em, 1, 0))
+```
+
+``` {r correct_output}
+EX_scorer <- function(query, ouput) {
+  output_query <- tryCatch(
+    dbGetQuery(gdb, query),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  question_ex <- isTRUE(all.equal(ouput, output_query, check.names = FALSE))
+  if (question_ex == TRUE) {
+  return(1)}
+  else {
+    return(0)}
+}
+data_EM_EX <- data_EM |>
+  mutate(EX = map_int(data_EM$query, ~ EX_scorer(.x, output_gold_truth_1)))
+data_EM_EX_tbl <- data_EM_EX |> 
+  distinct(model, .keep_all = TRUE)|>
+  select(chat_ID, model, query, EM, EX)
+```
+
+<div style="page-break-after: always;"></div>
+
+After scoring the EM and EX, the output of the SQL queries and outputs from the chats with a zero in exact match and execution accuracy are manually scored. In table 3 you can see the answers of the LLM's in the four chats with no EM or EX score.
+```{r data_yes, error=TRUE}
+data_YES_0 <- data_EM_EX |> 
+  filter(EX == 0) |>
+  select(chat_ID, model, EM, EX)
+kable(data_YES_0, 
+      caption = "Table 3: Chats with a 0 for EM and EX-score and their output",
+      format = "html") |>
+  kable_styling()
+query_17 <- data_EM_EX$query[data_EM_EX$chat_ID == 17]
+query_18 <- data_EM_EX$query[data_EM_EX$chat_ID == 18]
+query_19 <- data_EM_EX$query[data_EM_EX$chat_ID == 19]
+query_20 <- data_EM_EX$query[data_EM_EX$chat_ID == 20]
+
+# These queries were than checked through (dbGetQuery(gdb, query))
+```
+
+Chat_ID 17 and 18 cleary had the wrong answer. The right answer should say there are 190 variants in NEK1. Chat_ID 17 doesn't count the unique VAR_id, but it counts ID, which is a column that gives the ID of known variants that already received an ID in other databases. Chat_ID 18 counts the allel counts(AC) not the variants. The query of chat_ID 19 gives an error, because it is not complete. Notice the gene name is not in the query.  These don't get a point for right logic.  
+
+Chat_ID 20 gives the correct answer + an extra column with the gene name. This is the correct logic, plus something extra that is also correct which is why it gets a point for correct logic (YES). See the output in table 4.  
+
+
+```{r output_20, error=TRUE}
+output_20 <- dbGetQuery(gdb, query_20)
+kable(output_20, format = "html",
+      caption = "Table 4: Ouput of chat_ID 20 to question 'Select number of variants in NEK1.' This chat_ID has a 0 score for EM and EX. The correct answer is 190 variants. For this the chat_ID receives a YES score of 1.") |>
+  kable_paper()
+```
+
+```{r data_scored}
+data_scored <- data_EM_EX |>
+  mutate(YES = case_when(
+    EX == 1 ~ 1,
+    chat_ID == 20 ~ 1,
+    TRUE ~ 0  # Default case
+  ),
+  no_output_toolcall = case_when(
+    chat_ID == 19 ~ 1,
+    TRUE ~ 0
+  ))
+data_scored_sum <- data_scored |> 
+  group_by(model) |>
+  summarise(toolcall_counts = n(),
+            working_query = toolcall_counts  - sum(no_output_toolcall),
+            EM = sum(EM),
+            EX = sum(EX),
+            YES = sum(YES)
+            )
+# kable(data_scored_sum, 
+#      caption = "Table 4: Scores for LLM models with succesful toolcalls. The same prompt was asked 5 times. Working_query refers to if the query returns output or not.",
+#      format = "html") |>
+#  kable_styling()
+```
+If all replicates have a 1 in yes score the chat gave the correct answer. Here we see that both qwen3:8b and qwen3.5 gave the right answers when counting the YES score. Llama3.1:8b has an 80% YES-score, but did have 1 unsuccesful toolcall. Of the succesful toolcalls it had 2 exact matches and 2 execution accuracy scores. Qwen3.5 and qwen3:8b had no toolcall failures and delivered 4 and 5 execution accuracy scores respectively. Qwen3.5 had 1 chat where the EX was negative, but the YES was positive. As seen in table 3. Figure 1 shows the percentage of positive scores (EM, EX and YES) in the 4 different models. 
+
+``` {r sum_graph}
+data_scored_sum_tidy <- data_scored_sum |>
+  pivot_longer(cols = EM:YES, 
+               names_to = "score",
+               values_to = "counts") |>
+  mutate(percentage = (counts/5)*100)
+data_scored_sum_tidy |>  ggplot(aes(x = model, y = percentage, fill = score)) +
+    geom_col(position = position_dodge()) + 
+  scale_fill_manual(values=wes_palette(n = 3, name="GrandBudapest2")) +
+  labs(title = "Benchmarking scores of 4 different LLM models used through ollama",
+       x = "LLM model (from ollama)",
+       y = "Percentage positive scores",
+       caption = str_wrap("Figure 1: Benchmarking scores of 4 LLM models (from Ollama) answering benchmarkquestion 1: 'Select number of variants in NEK1", width = 100)) +
+         theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 0))
+```
+
+##### Negative control questions
+To decide if llama3.1:8b, qwen3:8b or qwen3.5 are better, all the negative control questions are used as a prompt once for all three models. After the first replica there was a clear difference between the models. Both qwen models don't give a working query and mostly respond with there being no or too little information to give an answer. Llama3.1:8b however, consistently provides queries and doesn't recognize that the information is not given in the table. As an example below you see the responses when prompted with question 12: 'What is the average age of ALS cases?'
+
+``` {r nc}
+data_nc_rep12 <- data_complete |>
+  filter(replicate == 1,
+         question_nr == 12) |>
+  select(model, assistant_text)
+response12_qwen35 <- data_nc_rep12$assistant_text[data_nc_rep12$model == "qwen3.5"]
+response12_qwen38b <- data_nc_rep12$assistant_text[data_nc_rep12$model == "qwen3:8b"]
+response12_llama318b <- data_nc_rep12$assistant_text[data_nc_rep12$model == "llama3.1:8b"]
+```
+
+
+**Qwen3.5** responded with: 
+```
+```{r, results='asis', echo=FALSE}
+cat(response12_qwen35)
+```
+```
+
+<div style="page-break-after: always;"></div>
+
+**Qwen3:8b** responded with:  
+```
+```{r, results='asis', echo=FALSE}
+cat(response12_qwen38b)
+```
+```
+
+
+**Llama3.1:8b** responded with:  
+```{r, echo=FALSE}
+cat(response12_llama318b)
+```
+
+
+
+``` {r output_14}
+data_nc_rep14 <- data_complete |>
+  filter(replicate == 1,
+         question_nr == 14) |>
+  select(question_nr, prompt, model, query, assistant_text)
+qwen38b_response <- data_nc_rep14$assistant_text[data_nc_rep14$model == "qwen3:8b"]
+qwen35_response <- data_nc_rep14$assistant_text[data_nc_rep14$model == "qwen3.5"]
+```
+Qwen3.5 mostly shows there is no answer possible, but sometimes it does try to run a query, for example in question 14: 'What is the allele frequency of VAR_id 30 in Europeans?' There is no population region information so this cannot be answered.  
+
+
+
+
+**Qwen3:8b**  responded with:
+```
+```{r, results='asis', echo=FALSE}
+cat(qwen38b_response)
+```
+```
+
+
+**Qwen3.5**  responded with:
+```
+```{r, results='asis', echo=FALSE}
+cat(qwen35_response)
+```
+```
+
+This indicates qwen3.5  still tried to make a query, it was just not the correct format to be accepted by querychat.
+
+<div style="page-break-after: always;"></div>
+
+Of the 4 models with working toolcalls, 2 are not suitable for creating accurate SQL-queries for the RVAT-database table: llama3.2 and llama3:8b. The first model gave false SQL-queries and the second answered unanswerable questions. 
+That leaves both qwen models as the most suitable. Qwen3:8b gives shorter, clearer answers in the control questions. Because of this qwen3:8b will be chosen as the model for further analysis. This model not only is the most suitable compared to the other models, but with a 100% execution accuracy (EX) for question 1 and consistently noticing the negative control questions were unanswerable, it answered every question following instructions. Making it the most accurate model of the 7 models that were analysed.
+
+#### Full analysis of qwen3:8b
+
+In the full analysis not all benchmark questions were asked in fivefold due to time constraints.  There were `r nrow(data)` replicates in total of which `r sum(data$type_question == "lookup")` are lookup questions, `r sum(data$type_question == "analytical")` are analystical questions and `r sum(data$type_question == "nc")` are negative control questions. The amount of replicates per question is shown in figure 2. 
+
+```{r scoring_EM_EX, include=FALSE}
+# If query is not NA 
+data$EM <- ifelse(
+  !is.na(data$query) &
+  !is.na(data$gold_truth_no_AS) &
+  data$query == data$gold_truth_no_AS,
+  1,
+  0
+)
+
+EX_scorer <- function(query, gold_truth) {
+  output_query <- tryCatch(
+    dbGetQuery(gdb, query),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  output_gold_truth <- tryCatch(
+    dbGetQuery(gdb, gold_truth),
+    error = function(e) NULL  # Return NULL if query fails
+  )
+  
+  question_ex <- isTRUE(all.equal(output_gold_truth, output_query, check.names = FALSE))
+  if (question_ex == TRUE) {
+  return(1)}
+  else {
+    return(0)}
+}
+
+data$EX <- map2_int(data$query, data$gold_truth, EX_scorer)
+```
+
+
+```{r YES_score, include=FALSE}
+data_YES <- data|> filter(EX == 0 & is.na(fail_reason)) |>
+  select(prompt, replicate, query, gold_truth, assistant_text)
+query <- data$query[data$question_nr == 7 & data$replicate == 1]
+gold <- data$gold_truth[data$question_nr == 7 & data$replicate == 1]
+output_query <- dbGetQuery(gdb, query)
+output_gold <- dbGetQuery(gdb, gold)
+
+data$YES <- case_when(
+    data$EX == 1 ~ 1,
+    data$question_nr == 6 & data$replicate == 3 ~ 1,
+    data$question_nr == 7 & data$replicate == 1 ~ 1,
+    TRUE ~ 0
+  )
+write_rds(data, here("data/data_scored.rds"))
+```
+
+
+```{r table_sum, echo=FALSE, message=FALSE}
+data_sum <- data |> 
+  group_by(question_nr, type_question) |>
+  summarise(replicates = n(),
+            EM_percentage = round(((sum(EM)/replicates)*100), digits = 0),
+            EX_percentage = round(((sum(EX)/replicates)*100), digits = 0),
+            YES_percentage = round(((sum(YES)/replicates)*100), digits = 0) 
+            )
+
+data_sum_type <- data |>
+  group_by(type_question) |>
+  summarise(replicates = n(),
+            EM_percentage = round(((sum(EM)/replicates)*100), digits = 0),
+            EX_percentage = round(((sum(EX)/replicates)*100), digits = 0),
+            YES_percentage = round(((sum(YES)/replicates)*100), digits = 0) 
+            )
+```
+
+``` {r plot_reps, echo = FALSE}
+plot_reps <- data_sum |>
+  ggplot(aes(x = as.factor(question_nr), y = replicates, fill = type_question)) +
+  geom_col() +
+  scale_fill_grey() +
+  labs(title = "Number of replicates per question",
+       x = "Question number",
+       y = "Number of replicates",
+       caption = "Figure 2: Number of replicates (chats) per question asked to LLM model 'qwen3:8b'") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 0))
+plot_reps
+```
+
+##### Positive scores
+Scoring the exact match (EM) and execution accuracy (EX) was performed with an R-script which respectively compared the query of the LLM with the gold truth and the output of the LLM query with the output of the gold truth query. With a positive EM-score, the EX and YES-scores were also positive. Any questions that got a negative EM and EX were manually checked for yielding expected semantics (YES-score). 
+
+Of the `r nrow(data)` total replicates `r sum(data$EM)` had an exact match (EM), `r sum(data$EX)` had a positive execution accuracy (EX) and `r sum(data$YES)` yielded exact semantics (YES).
+The 3rd replicate of question 6 and the 1st replicate of question 7 got a positive YES-score. In both cases the LLM gave the correct answer, but showed more variables or transposed the data table so rows became columns. Figure 3 shows the percentage of positive scores per question type.
+
+```{r plot_type, echo=FALSE}
+plot_data_tidy_type <- data_sum_type |>
+  pivot_longer(cols = EM_percentage:YES_percentage, 
+               names_to = "score_type",
+               values_to = "score_percentage")
+
+plot_type <- plot_data_tidy_type |>
+  ggplot(aes(x = as.factor(type_question),
+             y = score_percentage, 
+             fill = score_type)) +
+  geom_col(position = position_dodge()) +
+  scale_fill_manual(values=wes_palette(n = 3, name="GrandBudapest2")) +
+  labs(title = str_wrap("Percentage of positive scores for EM, EX and YES in different question types.", width = 50),
+       x = "Question type",
+       y = "Percentage positive scores",
+       caption = str_wrap("Figure 3: Percentage of positive scores per question type for the scores exact match (EM), execution accuracy (EX) and yields-expected-semantics (YES) when using qwen3:8b through ollama for text-to-SQL on an RVAT-database..", 
+                          width = 100)) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 0)) +
+  ylim(0, 100)
+
+plot_type
+```
+
+
+``` {r negative_reason, echo = FALSE}
+data_negative <- data |> filter(YES == 0)
+data_negative <- data_negative |> 
+  mutate(fail_reason = case_when(
+    str_detect(assistant_text, "The question is not clear or this information is not available in the database.") ~ "unclear question",
+   TRUE ~ fail_reason))
+
+data_negative <- data_negative |> 
+  mutate(fail_reason = case_when(
+    question_nr == 8 & replicate == 1 ~ "incomplete answer",
+    question_nr == 8 & replicate == 3 ~ "incomplete answer",
+    question_nr == 11 & replicate == 3 ~ "incomplete answer",
+    question_nr == 5 & replicate == 1 ~ "misinterpreted",
+    question_nr == 17 & replicate == 1 ~ "misinterpreted",
+    question_nr == 16 & replicate == 1 ~ "misinterpreted",
+    TRUE ~ fail_reason)
+  )
+
+# Make a factor of all the fail_reasons
+fail_reasons <- c("timeout", "unclear question", "incomplete answer", "misinterpreted")
+
+# Check if all the values of fail_reason are in fail_reasons
+# parse_factor(data_negative$fail_reason, levels = fail_reasons)
+
+# Make factor out of column fail_reason
+data_negative$fail_reason <- factor(data_negative$fail_reason, 
+                                           levels = fail_reasons)
+data_negative_counts <- data_negative |>
+  group_by(type_question, fail_reason) |>
+  dplyr::count()
+
+data_negative_question <- data_negative |>
+  group_by(question_nr, type_question) |>
+  dplyr::count(name = "failed_n")
+
+
+# Make sure that for every type_question every fail_reason contains data. To do this a 0 is added for all the fail_reasons without counts.
+data_negative_counts <- data_negative_counts |>
+  ungroup() |>
+  complete(type_question, fail_reason,
+           fill = list(n = 0))
+
+# Add total replicates per type_question and percentage
+data_negative_counts <- data_negative_counts |>
+  mutate(total_reps = case_when(type_question == "analytical" ~ data_sum_type$replicates[data_sum_type$type_question == "analytical"],
+                                type_question == "lookup" ~ data_sum_type$replicates[data_sum_type$type_question == "lookup"],
+                                type_question == "nc" ~ data_sum_type$replicates[data_sum_type$type_question == "nc"],
+                                TRUE ~ 0),
+         percentage = round(100*n/total_reps, digits = 1))
+```
+
+##### Failed outcomes  
+
+The chats that had no score in either EM, EX or YES were categorized by fail reason. There were 4 replicates with timeout errors in question 5, 2 in question 7, 8, 10 and 16 and 3 timeout errors in question 9. In 18 replicates the LLM model found the question to be unclear shown containing the answer:  "The question is not clear or this information is not available in the database". Which is a sign the LLM followed instructions and asked for clarification when unsure. The rest of the fail reasons were given manually.  
+
+Question 5 replicate 1 answered the question "What are the ten most deleterious variants in ABCA4?" with the top 10 most deleterious variants in the *ABCA4* gene, sorted by **HighImpact** (1 > 0) and **ModerateImpact** (1 > 0). A variant cannot be both HighImpact and ModerateImpact. This is a misinterpretation answer. 
+Question 8 " How many high-impact variants does the ALS_1 patient carry?" has 2 replicates that do not split the answer into two categories like the gold_truth did (hetero- and homozygous). It does have the correct amount for the combination of hetero- and homozygous variants. This is an incomplete answer, although the benchmark question is not specific enough to give the wanted golden truth. 
+On question 11 "Summarize variant info for each gene. Only select genes that have more than 10 variants. Order the results by the number of variants." one replicate gives an incomplete summary. It only summarizes the total variants in genes. This is also an incomplete answer. 
+On question 16 "Which variants are most important?" replicate 1 gives an answer, but to a subjective question. This is misinterpretation.
+One replicate on question 17 " Which variants are both synonymous and high impact? " has a correct output in that it filters the dashboard to show no results. But it should know that high impact and synonymous can't go together. This is also misinterpretation.
+
+Figure 4 shows the percentage of failed outcomes (where the EX-score and YES-score is 0) with the provided reason of the failure.
+
+
+``` {r plot_negative, echo = FALSE}
+# Make plot with percentage of negative counts per type_question and fail_reason
+plot_negative <- data_negative_counts |>
+  ggplot(aes(x = type_question, 
+             y = percentage,
+             fill = fail_reason)) +
+  geom_col(position = position_dodge()) +
+  scale_fill_manual(values=wes_palette(n = 4, name="GrandBudapest1")) +
+  labs(title = "Percentage of failed outcomes per fail category per question type",
+       x = "Question type",
+       y = "Percentage failed outcomes",
+       caption = str_wrap("Figure 4: Percentage of failed outcomes per question type when using qwen3:8b through ollama for text-to-SQL on an RVAT-database. The categories give an indication for the reason the query failed.", 
+                          width = 100)) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 0)) +
+  ylim(0,100)
+
+plot_negative
+```
+
+Qwen3:8b can answer the majority of the benchmark questions of the lookup (78%) or negative control type (89%). Analytical questions were either thought about too long (timeout error), or the LLM notified it didn't have enough information of the question or it was unclear.  It only misinterpreted the question when the question was subjective like "Which variants are most important?" or "Show the 10 most deletorious questions". Even then, it did only use data out of the gdb-database and didn't hallucinate anything outside of the database.
+
+<div style="page-break-after: always;"></div>
+
+## Conclusion
+
+The results show that the reliability of the generated SQL queries depends on the model and the type of question asked. The model qwen3:8b generated reliable SQL queries when asked lookup questions and generally remained faithful to the data. The model’s tendency to identify unclear questions rather than misinterpret questions or database information is promising because it reduces the risk of hallucinations. Analytical questions and subjective questions were difficult for the LLM to answer. These questions may require additional context about the database, more detailed prompts, and/or follow-up questions. 
+
+The biggest hurdle however is that the prototype can only use one table as a database. This makes it unusable for use of an actual RVAT-database, which is made up of many different tables that need to be combined to give a correct answer. The RVAT package is designed to organise the database efficiently, meaning that transferring all information into a single table is not a practical long-term solution. Using one table is a structural limit within the querychat app, but even without this structural limit it would requiere more complicated queries. And as the complexity of questions went up, the succes rate of the model clearly went down. Making for another challenge. 
+
+#### Limitations  
+
+The current benchmark questions are sometimes not completely aligned with the gold truth or are ambiguous/subjective. It would be best to change the questions that are not aligned and to make a new category for ambiguous/subjective questions as a control group with the gold truth being the fail reason ‘unclear question’. This way questions that can have multiple interpretations can be separated in the benchmark scores, making more clear which models recognise subjectivity and ask to clarify.  
+
+There was a limited sample size when selecting the best model. Due to time constraints, only one lookup question was used in fivefold and the negative controls just once. While this did showed clear differences in models that couldn’t answer a lookup question with one parameter or were so keen to answer they ignored other instructions, a full analysis using all four models that successfully performed tool calls would provide a more reliable comparison.  
+
+Another limitation concerns the YES-scoring method. The method requires manual checking, and for the purposes of this research it was assumed that a positive Exact Match (EM) and/or Execution (EX) score indicated a positive YES-score. This assumption is appropriate for EM-scores, but an EX-score alone does not necessarily demonstrate that the generated query has the same meaning as the golden-truth query. A query can execute successfully while retrieving information that does not answer the intended question. Therefore, queries with a negative EM-score but a positive EX-score should also be manually assessed for semantic equivalence with the golden-truth query.  
+
+Finally, the efficiency of the system should be improved and measured. Generating an SQL query took approximately one to five minutes within the querychat app, although this wasn’t logged or officially measured. This makes the prototype possibly slower than making your own SQL-query. The time it takes to generate a usable query should be measured in further experiments. Different LLM’s or pipelines can that way be compared on efficiency.  
+
+#### Further recommendations  
+
+The benchmark scores of qwen3:8b could be used as a benchmarking norm for further development of the prototype. Simple improvements could be made by using more benchmark questions,  a larger selection of LLM models (with models larger and smaller in size than the ones used now) and using different prompts to see how this influences the benchmark scoring. It would also be helpful to see if follow-up questions could result in a positive score when the LLM model finds the question unclear.  
+
+<div style="page-break-after: always;"></div>
+
+The logging function provides useful information for the evaluation to score the LLM model. However, the intermediate turns are not logged or available for analysis. A model could therefore reach a correct final query after several incorrect queries involving faulty logic or hallucinations, which would not be detected. The logging function should therefore be evaluated, and potentially (partially) rewritten, by someone with sufficient knowledge of Ellmer and R to identify possible oversights.  
+
+A major area for further development is making a prototype suitable for a multi-tabled RVAT database. Two possible options could be explored for this. The first is to explore if the code of querychat could be used and changed so it accepts multiple tables.  This keeps the built-in safety measures of querychat as it checks if the SQL query is fit to run on the database.  
+ Another possibility is to customise an LLM specifically for the RVAT database and using Ellmer to create toolcalls and giving the structure of the database in a system prompt. It is not recommended to give the LLM model direct access to the database. Toolcalls could add a layer between the LLM and the database. Possibly a customised model like this would benefit from using multiple steps. For instance step one is the model checks if the question is clear and the parameters are within the database structure. Step two is writing the SQL-code with strict coding rules. This could be done by different LLM’s each specialised in either natural language understanding or SQL-coding. Multi-step methods like this already show accuracy improvement in large benchmarking tests (Pourreza et al, 2024; Talaei et al, 2024). 
+
+To conclude, the prototype, along with the benchmarking of different LLM models, demonstrate that it is possible to generate relatively reliable and accurate SQL queries in response to lookup questions when using a scaled down RVAT database connected to querychat and Ollama. However, there are still multiple shortcomings and challenges to overcome before it is practical for it’s use case. 
+
+<div style="page-break-after: always;"></div>
+
+## References
+
+ 
+
+1.    Wang H, Guan L and Deng M (2023) Recent progress of the genetics of amyotrophic lateral sclerosis and challenges of gene therapy. Front. Neurosci. 17:1170996. doi: 10.3389/fnins.2023.1170996 
+     
+
+2.    Van Damme P, Al-Chalabi A, Andersen PM, et al. European Academy of Neurology (EAN) guideline on the management of amyotrophic lateral sclerosis in collaboration with European Reference Network for Neuromuscular Diseases (ERNEURO-NMD). Eur J Neurol. 2024;31:e16264. doi:10.1111/ene.16264 
+     
+
+3.    Al-Chalabi, A., Hardiman, O. The epidemiology of ALS: a conspiracy of genes, environment and time. Nat Rev Neurol 9, 617–628 (2013). https://doi.org/10.1038/nrneurol.2013.203 
+
+ 
+
+4.    Masrori, P., & Van Damme, P. (2020). Amyotrophic lateral sclerosis: a clinical review. European journal of neurology, 27(10), 1918–1929. https://doi.org/10.1111/ene.14393 
+
+ 
+
+5.    Epidemiologie van ALS - ALS-centrum. (2023, December 27). ALS-centrum. https://als-centrum.nl/kennisbank/epidemiologie-van-als/ 
+
+ 
+
+6.    Spencer, P. S., Palmer, V. S., Kisby, G. E., Lagrange, E., Horowitz, B. Z., Valdes Angues, R., Reis, J., Vernoux, J. P., Raoul, C., & Camu, W. (2023). Early-onset, conjugal, twin-discordant, and clusters of sporadic ALS: Pathway to discovery of etiology via lifetime exposome research. Frontiers in neuroscience, 17, 1005096. https://doi.org/10.3389/fnins.2023.1005096 
+
+ 
+
+7.    Tarr, I.S., McCann, E.P., Benyamin, B. et al. Monozygotic twins and triplets discordant for amyotrophic lateral sclerosis display differential methylation and gene expression. Sci Rep 9, 8254 (2019). https://doi.org/10.1038/s41598-019-44765-4 
+
+ 
+
+8.    Van Es, M. A., Dahlberg, C., Birve, A., Veldink, J. H., van den Berg, L. H., & Andersen, P. M. (2010). Large-scale SOD1 mutation screening provides evidence for genetic heterogeneity in amyotrophic lateral sclerosis. Journal of neurology, neurosurgery, and psychiatry, 81(5), 562–566. https://doi.org/10.1136/jnnp.2009.181453 
+
+ 
+
+9.    Lee, S., Abecasis, G. R., Boehnke, M., & Lin, X. (2014). Rare-variant association analysis: study designs and statistical tests. American journal of human genetics, 95(1), 5–23. https://doi.org/10.1016/j.ajhg.2014.06.009 
+     
+
+10.    Samtools. (2024). Variant Call Format (VCF) version 4.5 specification. https://samtools.github.io/hts-specs/VCFv4.5.pdf 
+
+ 
+
+11.    Naveed, H., Khan, A. U., Qiu, S., Saqib, M., Anwar, S., Usman, M., Akhtar, N., Barnes, N., & Mian, A. (2025). A comprehensive overview of large language models. ACM Transactions on Intelligent Systems and Technology, 16(5), 1–72. https://doi.org/10.1145/3744746 
+
+ 
+
+12.    Ollama. (n.d.). Ollama. Retrieved April 4, 2026, from https://ollama.com/ 
+
+ 
+
+13.    Horst AM, Hill AP, Gorman KB (2020). palmerpenguins: Palmer Archipelago (Antarctica) penguin data. R package version 0.1.0. https://allisonhorst.github.io/palmerpenguins/. doi: 10.5281/zenodo.3960218. 
+     
+
+14.    Aden-Buie G, Cheng J, Sievert C (2026). querychat: Filter and Query Data Frames in 'shiny' Using an LLM Chat Interface. R package version 0.2.0, https://posit-dev.github.io/querychat/r/ 
+     
+
+15.    Kenna K, Hop P (2026). rvat: Rare variant analysis toolkit. R package version 0.3.4.  
+     
+
+16.    Gruber J, Weber M (2026). rollama: Communicate with 'Ollama' to Run Large Language Models Locally. R package version 0.2.2.9000, https://jbgruber.github.io/rollama/. 
+     
+
+17.    Wickham H, Cheng J, Jacobs A, Aden-Buie G, Schloerke B (2026). ellmer: Chat with Large Language Models. R package version 0.4.1, https://ellmer.tidyverse.org. 
+     
+
+18.    Chang W, Cheng J, Allaire J, Sievert C, Schloerke B, Aden-Buie G, Xie Y, Allen J, McPherson J, Dipert A, Borges B (2026). shiny: Web Application Framework for R. R package version 1.13.0.9000, https://shiny.posit.co/. 
+     
+
+19.    Singh, Garima & Chhabra, Prachi & Banerjee, Tathagat. (2026). A Comprehensive Review of LLM-based Text-to-SQL Systems: Methods, Datasets, and Trends. Computational Systems and Artificial Intelligence. 2. 10.69882/adba.csai.2026011 
+
+ 
+
+20.    Pinna, G., Perezhohin, Y., Manzoni, L. et al. Redefining text-to-SQL metrics by incorporating semantic and structural similarity. Sci Rep 15, 22357 (2025). https://doi.org/10.1038/s41598-025-04890-9 
+
+ 
+
+21.    Yu, T., Zhang, R., Yang, K., Yasunaga, M., Wang, D., Li, Z., Ma, J., Li, I., Yao, Q., Roman, S., Zhang, Z., & Radev, D. (2018). Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain\n Semantic Parsing and Text-to-SQL Task. arXiv (Cornell University). https://doi.org/10.48550/arxiv.1809.08887 
+
+22.   Pourreza, M., Li, H., Sun, R., Chung, Y., Talaei, S., Kakkar, G. T., Gan, Y., Saberi, A., Ozcan, F., & Arik, S. O. (2024). CHASE-SQL: Multi-Path reasoning and preference optimized candidate selection in Text-to-SQL. arXiv (Cornell University). https://doi.org/10.48550/arxiv.2410.01943
+
+23.   Talaei, S., Pourreza, M., Chang, Y., Mirhoseini, A., & Saberi, A. (2024). CHESS: Contextual Harnessing for efficient SQL synthesis. arXiv (Cornell University). https://doi.org/10.48550/arxiv.2405.16755

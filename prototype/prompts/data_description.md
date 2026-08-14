@@ -1,3 +1,8 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 # Data description
 
 This is the data structure for the table 'varInfo_synthetic'.

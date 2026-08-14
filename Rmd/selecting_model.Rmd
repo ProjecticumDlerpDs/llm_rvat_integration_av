@@ -14,7 +14,7 @@ pre {
 }
 </style>
 
-```{r setup, include=FALSE}
+```{r setup2, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(tidyverse)
 library(here)
@@ -29,9 +29,7 @@ outdir <- tempdir()
 gdb <- gdb(rvat_example("rvatData.gdb"))
 data_complete <- readRDS(here("data/data_complete.rds"))
 gold_truth_1 <- "SELECT COUNT(VAR_id) AS number_of_variants FROM varInfo_synthetic WHERE gene_name = 'NEK1'"
-gold_truth_2 <- unique(data_complete$gold_truth[data_complete$question_nr==2])
 output_gold_truth_1 <- dbGetQuery(gdb, gold_truth_1)
-output_gold_truth_2 <- dbGetQuery(gdb, gold_truth_2)
 ```
 
 ## Which LLM model within Ollama is most suitable for generating SQL queries within Querychat?
@@ -129,7 +127,7 @@ query_20 <- data_EM_EX$query[data_EM_EX$chat_ID == 20]
 
 # These queries were than checked through (dbGetQuery(gdb, query))
 ```
-Chat_ID 17 and 18 cleary had the wrong answer. The right answer should say there are 190 variants in NEK1. Chat_ID 17 doesn't count the unique VAR_id, but it counts ID, which is a column that gives the ID of known variants that already received an ID in other databases. Chat_ID 18 counts the allel counts(AC) not the variants. The query of chat_ID 19 gives an error, because it is not complete. Notice the gene name is not in the query.  Which is why these don't get a point for right logic.  
+Chat_ID 17 and 18 cleary had the wrong answer. The right answer should say there are 190 variants in NEK1. Chat_ID 17 doesn't count the unique VAR_id, but it counts ID, which is a column that gives the ID of known variants that already received an ID in other databases. Chat_ID 18 counts the allel counts(AC) not the variants. The query of chat_ID 19 gives an error, because it is not complete. Notice the gene name is not in the query.  These don't get a point for right logic.  
 
 Chat_ID 20 gives the correct answer + an extra column with the gene name. This is the correct logic, plus something extra that is also correct which is why it gets a point for correct logic (YES). See the output in table 3.  
 
